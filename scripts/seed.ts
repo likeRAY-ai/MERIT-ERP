@@ -32,6 +32,10 @@ async function main() {
 
   const existing = await db.query.users.findFirst();
   if (!existing) {
+    // 在 Vercel 自動部署時，必須事先設定初始密碼（建置紀錄不適合顯示密碼）
+    if (process.env.VERCEL && !process.env.SEED_ADMIN_PASSWORD) {
+      throw new Error("第一次部署請在 Vercel 環境變數設定 SEED_ADMIN_PASSWORD（老闆帳號的初始密碼）");
+    }
     const password = process.env.SEED_ADMIN_PASSWORD || randomBytes(6).toString("base64url");
     await db.insert(schema.users).values({
       username: "admin",

@@ -28,7 +28,8 @@ Next.js 15 · PostgreSQL · Drizzle ORM · Tailwind CSS
 3. 在 Vercel 的 **Environment Variables** 加入：
    - `DATABASE_URL`：第 1 步的連線字串
    - `AUTH_SECRET`：至少 32 字元的隨機字串
-4. **建立資料表與老闆帳號**（只需做一次，之後新版本有資料庫變更時再執行 `db:migrate`）：
+   - `SEED_ADMIN_PASSWORD`：老闆帳號 admin 的初始密碼（至少 8 字元）
+4. **建立資料表與老闆帳號**：Vercel 部署時會自動執行（使用 `vercel-build`），第一次部署前請在環境變數加上 `SEED_ADMIN_PASSWORD`。若要手動執行：
    ```bash
    npm install
    cp .env.example .env   # 填入 DATABASE_URL、AUTH_SECRET、SEED_ADMIN_PASSWORD
