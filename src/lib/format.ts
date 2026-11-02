@@ -192,3 +192,44 @@ export function billingLabel(c: { billingType: string; billingMonths: number }) 
   if (c.billingType === "DAILY") return "按天計租";
   return c.billingMonths === 1 ? "每月收款" : `每 ${c.billingMonths} 個月收一次`;
 }
+
+// 金額大寫（新台幣），例如 12345 → 壹萬貳仟參佰肆拾伍元整
+export function chineseAmount(n: number): string {
+  const digits = "零壹貳參肆伍陸柒捌玖";
+  const small = ["", "拾", "佰", "仟"];
+  const big = ["", "萬", "億", "兆"];
+  if (!Number.isFinite(n)) return "";
+  const neg = n < 0;
+  let v = Math.round(Math.abs(n));
+  if (v === 0) return "零元整";
+  const groups: number[] = [];
+  while (v > 0) {
+    groups.push(v % 10000);
+    v = Math.floor(v / 10000);
+  }
+  let out = "";
+  let needZero = false;
+  for (let g = groups.length - 1; g >= 0; g--) {
+    const grp = groups[g];
+    if (grp === 0) {
+      needZero = out !== "";
+      continue;
+    }
+    if (needZero || (out !== "" && grp < 1000)) out += "零";
+    needZero = false;
+    let s = "";
+    let zero = false;
+    for (let i = 3; i >= 0; i--) {
+      const d = Math.floor(grp / 10 ** i) % 10;
+      if (d === 0) {
+        zero = s !== "";
+      } else {
+        if (zero) s += "零";
+        zero = false;
+        s += digits[d] + small[i];
+      }
+    }
+    out += s + big[g];
+  }
+  return (neg ? "負" : "") + out + "元整";
+}

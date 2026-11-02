@@ -84,7 +84,11 @@ export default async function ContractPage({
 
   return (
     <div className="max-w-5xl space-y-4">
-      <PageHeader title={`租約 ${c.number}`} back="/rentals" />
+      <PageHeader
+        title={`租約 ${c.number}`}
+        back="/rentals"
+        actions={<Link href={`/print/rental/${c.id}`} className="btn">🖨️ 列印租約</Link>}
+      />
       {created && <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">租約已建立，設備狀態已改為出租中</p>}
 
       <div className="card space-y-3">
@@ -166,7 +170,7 @@ export default async function ContractPage({
         <TableWrap>
           {bills.length ? (
             <table className="table">
-              <thead><tr><th>期間</th><th>銷貨單</th><th className="text-right">金額</th><th className="text-right">未收</th></tr></thead>
+              <thead><tr><th>期間</th><th>銷貨單</th><th className="text-right">金額</th><th className="text-right">未收</th><th></th></tr></thead>
               <tbody>
                 {bills.map((b) => (
                   <tr key={b.id}>
@@ -174,6 +178,7 @@ export default async function ContractPage({
                     <td><Link href={`/sales/${b.saleId}`} className="link">{b.number}</Link></td>
                     <td className="text-right">{money(b.total)}</td>
                     <td className="text-right">{b.total > b.paid ? <span className="text-red-600">{money(b.total - b.paid)}</span> : "已收"}</td>
+                    <td className="text-right"><Link href={`/print/sale/${b.saleId}`} className="link whitespace-nowrap">🖨️ 帳單</Link></td>
                   </tr>
                 ))}
               </tbody>

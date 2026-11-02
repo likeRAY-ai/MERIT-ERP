@@ -6,7 +6,6 @@ import { purchases } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
 import { money, dateStr, dateTimeStr } from "@/lib/format";
 import { PageHeader } from "@/components/ui";
-import PrintButton from "@/components/PrintButton";
 
 export const metadata = { title: "進貨單" };
 
@@ -34,7 +33,7 @@ export default async function PurchasePage({
         actions={
           <>
             <Link href="/purchases/new" className="btn">＋ 再開一張</Link>
-            <PrintButton />
+            <Link href={`/print/purchase/${p.id}`} className="btn">🖨️ 列印</Link>
           </>
         }
       />

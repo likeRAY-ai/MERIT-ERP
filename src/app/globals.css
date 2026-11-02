@@ -74,3 +74,86 @@ body {
     padding: 0;
   }
 }
+
+/* ───────── 單據列印版面（A4／中一刀） ───────── */
+.pdoc-bg {
+  background: #e5e7eb;
+  min-height: 100dvh;
+  padding-bottom: 2rem;
+}
+.pdoc {
+  margin: 1rem auto;
+  background: white;
+  color: #000;
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.15);
+  font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+  line-height: 1.35;
+}
+.pdoc-a4 {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 12mm 12mm;
+  font-size: 10.5pt;
+}
+.pdoc-half {
+  width: 241mm;
+  min-height: 140mm;
+  padding: 6mm 8mm;
+  font-size: 9pt;
+}
+@media screen and (max-width: 900px) {
+  .pdoc {
+    zoom: 0.4;
+  }
+}
+.pdoc table.pd-items {
+  width: 100%;
+  border-collapse: collapse;
+}
+.pdoc .pd-items th,
+.pdoc .pd-items td {
+  border: 1px solid #000;
+  padding: 0.25em 0.4em;
+  vertical-align: top;
+}
+.pdoc .pd-items th {
+  background: #f3f4f6;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pdoc-half .pd-items th,
+.pdoc-half .pd-items td {
+  padding: 0.1em 0.3em;
+}
+.pdoc .pd-items tr {
+  break-inside: avoid;
+}
+.pdoc .pd-box {
+  border: 1px solid #000;
+}
+.pdoc .pd-sign {
+  border-bottom: 1px solid #000;
+  height: 3.2em;
+}
+.pdoc-half .pd-sign {
+  height: 2.2em;
+}
+@media print {
+  .pdoc-bg {
+    background: white;
+    padding: 0;
+    min-height: 0;
+  }
+  .pdoc {
+    margin: 0;
+    box-shadow: none;
+    width: auto;
+    min-height: 0;
+    padding: 0;
+    zoom: 1;
+  }
+  .pdoc .pd-items th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

@@ -6,7 +6,6 @@ import { sales } from "@/db/schema";
 import { requireUser, canSeeCost } from "@/lib/auth";
 import { money, dateStr, dateTimeStr, PAYMENT_LABELS, TAX_TYPE_LABELS } from "@/lib/format";
 import { PageHeader } from "@/components/ui";
-import PrintButton from "@/components/PrintButton";
 import { COMPANY } from "@/lib/company";
 import { SaleInfoForm, VoidSaleForm } from "./SaleTools";
 
@@ -55,7 +54,8 @@ export default async function SalePage({
             {next && <Link href={`/sales/${next.id}`} className="btn">下一筆 ›</Link>}
             {canEdit && <Link href={`/sales/new?copy=${s.id}`} className="btn">複製</Link>}
             {canEdit && <Link href="/sales/new" className="btn">＋ 再開一張</Link>}
-            <PrintButton />
+            <Link href={`/print/sale/${s.id}`} className="btn">🖨️ 列印</Link>
+            <Link href={`/print/sale/${s.id}?ship=1`} className="btn">🖨️ 出貨單</Link>
           </>
         }
       />

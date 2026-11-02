@@ -8,7 +8,6 @@ import { money, dateStr, dateTimeStr, TAX_TYPE_LABELS } from "@/lib/format";
 import { orderShortage } from "@/lib/services/orders";
 import { COMPANY } from "@/lib/company";
 import { PageHeader } from "@/components/ui";
-import PrintButton from "@/components/PrintButton";
 import OrderActions from "./OrderActions";
 import { OrderStatusBadge } from "../StatusBadge";
 
@@ -81,7 +80,7 @@ export default async function OrderPage({
             {next && <Link href={`/orders/${next.id}`} className="btn" title="下一筆">下一筆 ›</Link>}
             {editable && <Link href={`/orders/${o.id}/edit`} className="btn">修改</Link>}
             {canEdit && <Link href={`/orders/new?copy=${o.id}`} className="btn">複製</Link>}
-            <PrintButton />
+            <Link href={`/print/order/${o.id}`} className="btn">🖨️ 列印</Link>
           </>
         }
       />
