@@ -21,6 +21,9 @@ function common(fd: FormData) {
     email: optStr(fd, "email"),
     address: optStr(fd, "address"),
     note: optStr(fd, "note"),
+    code: optStr(fd, "code"),
+    mobile: optStr(fd, "mobile"),
+    fax: optStr(fd, "fax"),
     active: fd.get("hasActive") ? fd.get("active") === "on" : true,
   };
 }
@@ -33,9 +36,6 @@ export async function saveCustomer(id: number | null, _: ActionState, fd: FormDa
     const data = {
       ...common(fd),
       type: fd.get("type") === "COMPANY" ? ("COMPANY" as const) : ("PERSONAL" as const),
-      code: optStr(fd, "code"),
-      mobile: optStr(fd, "mobile"),
-      fax: optStr(fd, "fax"),
       taxType: tt === "INCLUDED" || tt === "EXCLUDED" ? (tt as "INCLUDED" | "EXCLUDED") : null,
     };
     if (data.code) {
@@ -61,6 +61,12 @@ export async function saveSupplier(id: number | null, _: ActionState, fd: FormDa
   const res = await runAction(async () => {
     await requireActionUser(["OWNER", "STAFF"]);
     const data = common(fd);
+    if (data.code) {
+      const dup = await db.query.suppliers.findFirst({
+        where: and(eq(suppliers.code, data.code), id ? ne(suppliers.id, id) : undefined),
+      });
+      if (dup) throw new AppError(`廠商編號 ${data.code} 已被「${dup.name}」使用`);
+    }
     if (id) {
       await db.update(suppliers).set(data).where(eq(suppliers.id, id));
     } else {

@@ -29,6 +29,13 @@
       "when": 1793596505616,
       "tag": "0003_product_alt_code",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793598941021,
+      "tag": "0004_supplier_fields",
+      "breakpoints": true
     }
   ]
 }

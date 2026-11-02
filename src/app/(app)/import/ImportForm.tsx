@@ -25,6 +25,7 @@ export default function ImportForm() {
           <select name="kind" className="input max-w-xs" defaultValue="customers">
             <option value="customers">客戶基本資料</option>
             <option value="products">商品（產品）基本資料</option>
+            <option value="suppliers">廠商基本資料</option>
           </select>
         </label>
         <label className="block">

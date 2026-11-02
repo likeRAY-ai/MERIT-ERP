@@ -102,10 +102,13 @@ export const suppliers = pgTable(
   "suppliers",
   {
     id: serial("id").primaryKey(),
+    code: text("code").unique(), // 廠商編號（舊系統匯入）
     name: text("name").notNull(),
     taxId: text("tax_id"),
     contact: text("contact"),
     phone: text("phone"),
+    mobile: text("mobile"),
+    fax: text("fax"),
     email: text("email"),
     address: text("address"),
     note: text("note"),

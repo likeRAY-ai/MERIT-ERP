@@ -4,12 +4,13 @@ import { revalidatePath } from "next/cache";
 import { inArray } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import { db } from "@/db";
-import { customers, products } from "@/db/schema";
+import { customers, products, suppliers } from "@/db/schema";
 import { requireActionUser } from "@/lib/auth";
 import { AppError } from "@/lib/errors";
 import { money } from "@/lib/format";
 import { importCustomers, parseLegacyCustomers } from "@/lib/services/importCustomers";
 import { importProducts, parseLegacyProducts } from "@/lib/services/importProducts";
+import { importSuppliers, parseLegacySuppliers } from "@/lib/services/importSuppliers";
 
 export type ImportState =
   | {
@@ -47,14 +48,16 @@ function parse<T>(fn: () => T): T {
   }
 }
 
-async function existingKeys(keys: string[], kind: "customers" | "products") {
+async function existingKeys(keys: string[], kind: "customers" | "products" | "suppliers") {
   const found = new Set<string>();
   for (let i = 0; i < keys.length; i += 1000) {
     const part = keys.slice(i, i + 1000);
     const rows =
       kind === "customers"
-        ? (await db.select({ k: customers.code }).from(customers).where(inArray(customers.code, part)))
-        : (await db.select({ k: products.sku }).from(products).where(inArray(products.sku, part)));
+        ? await db.select({ k: customers.code }).from(customers).where(inArray(customers.code, part))
+        : kind === "suppliers"
+          ? await db.select({ k: suppliers.code }).from(suppliers).where(inArray(suppliers.code, part))
+          : await db.select({ k: products.sku }).from(products).where(inArray(products.sku, part));
     rows.forEach((r) => r.k && found.add(r.k));
   }
   return found;
@@ -96,6 +99,28 @@ export async function runImport(_: ImportState, fd: FormData): Promise<ImportSta
             r.phone ?? r.mobile ?? "—",
             r.taxId ?? "—",
           ]),
+        },
+      };
+    }
+
+    if (kind === "suppliers") {
+      const { records, skipped } = parse(() => parseLegacySuppliers(rows));
+      if (!records.length) throw new AppError("檔案中沒有可匯入的廠商");
+      if (doImport) {
+        const r = await importSuppliers(db, records);
+        revalidatePath("/suppliers");
+        return { done: { ...r, link: "/suppliers", label: "查看廠商" } };
+      }
+      const ex = await existingKeys(records.map((r) => r.code), "suppliers");
+      return {
+        preview: {
+          total: records.length,
+          newCount: records.length - ex.size,
+          updateCount: ex.size,
+          facts: ["負責人、工廠地址、營業項目、結帳方式等會放在備註"],
+          skipped,
+          columns: ["編號", "名稱", "電話", "統編"],
+          sample: records.slice(0, 8).map((r) => [r.code, r.name, r.phone ?? r.mobile ?? "—", r.taxId ?? "—"]),
         },
       };
     }

@@ -138,3 +138,29 @@ test("匯入商品：新商品帶庫存與異動紀錄，再匯入只更新基�
   assert.equal(again!.name, "DDR5 16G 新名稱");
   assert.equal((await db.select().from(schema.stockMovements)).length, 2);
 });
+
+// ───────── 廠商 ─────────
+import { parseLegacySuppliers, importSuppliers } from "../src/lib/services/importSuppliers";
+
+test("匯入廠商：解析、備註合併、重複匯入只更新", async () => {
+  const SH = ["廠商編號", "廠商名稱", "廠商簡稱", "負 責 人", "聯絡人１", "統一編號", "電 話 １", "大哥大１", "公司地址", "工廠地址", "結帳類別", "結帳類別", "營業項目", "建檔日期"];
+  const r = (o: Record<string, string>) => SH.map((h, i) => o[`${h}#${i}`] ?? o[h] ?? "");
+  const rows = [
+    ["廠 商 基 本 資 料"],
+    SH,
+    r({ 廠商編號: "A002", 廠商名稱: "立嵐", "負 責 人": "廖耿立", "電 話 １": "04-1", 公司地址: "台中市A", 工廠地址: "台中市B", "結帳類別#11": "月結", 建檔日期: "109/12/22" }),
+    r({ 廠商編號: "S1", 廠商名稱: "酷澎股份有限公司", 統一編號: "91002999", 大哥大１: "0936-398316" }),
+    ["主管:   製表:"],
+  ];
+  const { records, skipped } = parseLegacySuppliers(rows);
+  assert.equal(records.length, 2);
+  assert.equal(skipped.length, 0);
+  assert.match(records[0].note!, /負責人：廖耿立/);
+  assert.match(records[0].note!, /工廠地址：台中市B/);
+  assert.match(records[0].note!, /結帳：月結/);
+  assert.equal(records[1].taxId, "91002999");
+  assert.equal(records[1].phone, "0936-398316");
+  assert.deepEqual(await importSuppliers(db, records), { inserted: 2, updated: 0 });
+  assert.deepEqual(await importSuppliers(db, records), { inserted: 0, updated: 2 });
+  assert.equal((await db.select().from(schema.suppliers)).length, 2);
+});
