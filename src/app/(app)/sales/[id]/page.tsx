@@ -7,6 +7,7 @@ import { requireUser, canSeeCost } from "@/lib/auth";
 import { money, dateStr, dateTimeStr, PAYMENT_LABELS, TAX_TYPE_LABELS } from "@/lib/format";
 import { PageHeader } from "@/components/ui";
 import PrintButton from "@/components/PrintButton";
+import { COMPANY } from "@/lib/company";
 
 export const metadata = { title: "銷貨單" };
 
@@ -43,7 +44,11 @@ export default async function SalePage({
 
       <div className="card space-y-4">
         <div className="hidden text-center print:block">
-          <div className="text-xl font-bold">銷貨單</div>
+          <div className="text-xl font-bold">{COMPANY.name}</div>
+          <div className="text-xs">
+            {[`統編 ${COMPANY.taxId}`, `電話 ${COMPANY.phone}`, COMPANY.address].join("　")}
+          </div>
+          <div className="mt-2 text-lg font-bold tracking-widest">銷貨單</div>
           <div className="text-sm">{s.number}</div>
         </div>
         <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
