@@ -9,6 +9,7 @@ type Item = { href: string; label: string; icon: string };
 
 const MAIN: Item[] = [
   { href: "/", label: "首頁", icon: "🏠" },
+  { href: "/orders", label: "報價／訂單", icon: "📝" },
   { href: "/sales", label: "銷貨", icon: "🧾" },
   { href: "/purchases", label: "進貨", icon: "📦" },
   { href: "/products", label: "商品", icon: "🖥️" },
@@ -20,6 +21,7 @@ const MAIN: Item[] = [
 
 const BOTTOM: Item[] = [
   { href: "/", label: "首頁", icon: "🏠" },
+  { href: "/orders", label: "報價", icon: "📝" },
   { href: "/sales/new", label: "開銷貨單", icon: "🧾" },
   { href: "/purchases/new", label: "進貨", icon: "📦" },
   { href: "/serials", label: "序號", icon: "🔎" },
@@ -109,7 +111,7 @@ export default function Nav({ name, roleLabel, isOwner }: { name: string; roleLa
       )}
 
       {/* 手機：下方快捷列 */}
-      <nav className="no-print fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="no-print fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden">
         {BOTTOM.map((it) => (
           <Link
             key={it.href}

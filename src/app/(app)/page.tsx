@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { and, desc, gte, lte, sql, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { products, sales, customers } from "@/db/schema";
+import { products, sales, customers, orders } from "@/db/schema";
 import { requireUser, canSeeCost } from "@/lib/auth";
 import { money, dateTimeStr, startOfTaipeiDay, ymd } from "@/lib/format";
 import { TableWrap, Empty } from "@/components/ui";
@@ -25,7 +25,7 @@ export default async function Dashboard() {
   const d = ymd();
   const monthStart = new Date(`${d.slice(0, 4)}-${d.slice(4, 6)}-01T00:00:00+08:00`);
 
-  const [todaySum, monthSum, lowStock, recent] = await Promise.all([
+  const [todaySum, monthSum, lowStock, recent, orderCounts] = await Promise.all([
     salesSummary(today),
     salesSummary(monthStart),
     db
@@ -40,7 +40,14 @@ export default async function Dashboard() {
       .leftJoin(customers, eq(sales.customerId, customers.id))
       .orderBy(desc(sales.id))
       .limit(8),
+    db
+      .select({ status: orders.status, count: sql<number>`count(*)::int` })
+      .from(orders)
+      .where(sql`${orders.status} in ('QUOTE','CONFIRMED')`)
+      .groupBy(orders.status),
   ]);
+  const quoteCount = orderCounts.find((c) => c.status === "QUOTE")?.count ?? 0;
+  const pendingCount = orderCounts.find((c) => c.status === "CONFIRMED")?.count ?? 0;
 
   const cards = [
     { label: "今日銷售", value: money(todaySum.total), sub: `${todaySum.count} 筆` },
@@ -63,7 +70,21 @@ export default async function Dashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {(quoteCount > 0 || pendingCount > 0) && (
+        <div className="grid grid-cols-2 gap-3">
+          <Link href="/orders?status=QUOTE" className="card hover:bg-gray-50">
+            <div className="text-sm text-gray-500">報價中（等客戶回覆）</div>
+            <div className="mt-1 text-2xl font-bold">{quoteCount} 張</div>
+          </Link>
+          <Link href="/orders?status=CONFIRMED" className="card hover:bg-gray-50">
+            <div className="text-sm text-gray-500">已成交待出貨</div>
+            <div className="mt-1 text-2xl font-bold text-blue-700">{pendingCount} 張</div>
+          </Link>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <Link href="/orders/new" className="btn py-3">＋ 開報價單</Link>
         <Link href="/sales/new" className="btn-primary py-3">＋ 開銷貨單</Link>
         <Link href="/purchases/new" className="btn py-3">＋ 進貨</Link>
         <Link href="/products/new" className="btn py-3">＋ 新增商品</Link>

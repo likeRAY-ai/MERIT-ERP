@@ -11,13 +11,17 @@ export default function PurchaseForm({
   suppliers,
   defaultSupplier,
   today,
+  initialLines = [],
+  note = "",
 }: {
   suppliers: { id: number; name: string }[];
   defaultSupplier?: number;
   today: string;
+  initialLines?: Line[];
+  note?: string;
 }) {
   const [state, action, pending] = useFormAction(submitPurchase);
-  const [lines, setLines] = useState<Line[]>([]);
+  const [lines, setLines] = useState<Line[]>(initialLines);
 
   const missingSerial = lines.find((l) => l.product.trackSerial && l.serials.length === 0);
   const items = lines.map((l) => ({ productId: l.product.id, qty: l.qty, unitCost: l.price, serials: l.serials }));
@@ -48,7 +52,7 @@ export default function PurchaseForm({
           <input type="date" name="date" defaultValue={today} className="input" />
         </Field>
         <Field label="備註">
-          <input name="note" className="input" placeholder="例如：廠商發票號碼" />
+          <input name="note" className="input" placeholder="例如：廠商發票號碼" defaultValue={note} />
         </Field>
       </div>
 

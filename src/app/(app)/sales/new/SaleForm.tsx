@@ -4,27 +4,59 @@ import { useState } from "react";
 import { useFormAction } from "@/lib/useFormAction";
 import LineItems, { type Line } from "@/components/LineItems";
 import { Field, FormMessage } from "@/components/FormState";
-import { money, taxFromTotal } from "@/lib/format";
+import { money, calcTotals, convertPrice, type TaxType } from "@/lib/format";
 import { submitSale } from "../actions";
 
 type C = { id: number; name: string; type: "PERSONAL" | "COMPANY"; taxId: string | null; phone: string | null };
 
-export default function SaleForm({ customers, defaultCustomer }: { customers: C[]; defaultCustomer?: number }) {
+export type FromOrder = {
+  id: number;
+  number: string;
+  customerId: number | null;
+  buyerTaxId: string | null;
+  taxType: TaxType;
+  paymentTerms: string | null;
+  lines: Line[];
+};
+
+export default function SaleForm({
+  customers,
+  defaultCustomer,
+  fromOrder,
+}: {
+  customers: C[];
+  defaultCustomer?: number;
+  fromOrder?: FromOrder;
+}) {
   const [state, action, pending] = useFormAction(submitSale);
-  const [lines, setLines] = useState<Line[]>([]);
-  const [customerId, setCustomerId] = useState<number | "">(defaultCustomer ?? "");
+  const [lines, setLines] = useState<Line[]>(fromOrder?.lines ?? []);
+  const [customerId, setCustomerId] = useState<number | "">(fromOrder ? (fromOrder.customerId ?? "") : (defaultCustomer ?? ""));
   const [filter, setFilter] = useState("");
   const customer = customers.find((c) => c.id === customerId);
-  const [taxId, setTaxId] = useState(customer?.taxId ?? "");
-  const [payment, setPayment] = useState("CASH");
+  const [taxId, setTaxId] = useState(fromOrder ? (fromOrder.buyerTaxId ?? "") : (customer?.taxId ?? ""));
+  const [payment, setPayment] = useState(fromOrder?.paymentTerms?.includes("月結") && fromOrder.customerId ? "CREDIT" : "CASH");
+  const [taxType, setTaxType] = useState<TaxType>(fromOrder?.taxType ?? "INCLUDED");
 
   const business = customer?.type === "COMPANY";
-  const total = lines.reduce((s, l) => s + l.qty * l.price, 0);
+  const t = calcTotals(lines.reduce((s, l) => s + l.qty * l.price, 0), taxType);
+  const total = t.total;
   const cost = lines.every((l) => l.product.avgCost !== null)
     ? lines.reduce((s, l) => s + l.qty * (l.product.avgCost ?? 0), 0)
     : null;
   const missingSerial = lines.find((l) => l.product.trackSerial && l.serials.length === 0);
-  const items = lines.map((l) => ({ productId: l.product.id, qty: l.qty, unitPrice: l.price, serials: l.serials }));
+  const items = lines.map((l) => ({
+    productId: l.product.id,
+    qty: l.qty,
+    unitPrice: l.price,
+    serials: l.serials,
+    orderItemId: l.orderItemId ?? null,
+  }));
+  const zeroQty = lines.find((l) => l.qty <= 0 && !l.product.trackSerial);
+
+  function changeTax(next: TaxType) {
+    setLines((ls) => ls.map((l) => ({ ...l, price: convertPrice(l.price, taxType, next) })));
+    setTaxType(next);
+  }
 
   const shown = filter
     ? customers.filter((c) => c.name.includes(filter) || c.phone?.includes(filter) || c.taxId?.includes(filter))
@@ -53,6 +85,7 @@ export default function SaleForm({ customers, defaultCustomer }: { customers: C[
           />
           <select
             className="input"
+            disabled={!!fromOrder}
             value={customerId}
             onChange={(e) => pickCustomer(e.target.value ? Number(e.target.value) : "")}
           >
@@ -86,30 +119,56 @@ export default function SaleForm({ customers, defaultCustomer }: { customers: C[
               <option value="CREDIT">月結</option>
             </select>
           </Field>
+          <Field label="營業稅" hint={fromOrder ? "依訂單的稅別" : undefined}>
+            <select
+              name="taxType"
+              className="input"
+              value={taxType}
+              disabled={!!fromOrder}
+              onChange={(e) => changeTax(e.target.value as TaxType)}
+            >
+              <option value="INCLUDED">含稅價</option>
+              <option value="EXCLUDED">外加稅 5%</option>
+            </select>
+            {fromOrder && <input type="hidden" name="taxType" value={taxType} />}
+          </Field>
         </div>
         <Field label="備註" className="sm:col-span-2">
-          <input name="note" className="input" placeholder="例如：組裝需求、交貨時間" />
+          <input
+            name="note"
+            className="input"
+            placeholder="例如：組裝需求、交貨時間"
+            defaultValue={fromOrder ? `訂單 ${fromOrder.number}` : undefined}
+          />
         </Field>
       </div>
 
       <div className="card">
         <h2 className="mb-2 font-semibold">銷售商品</h2>
-        <LineItems mode="sale" lines={lines} setLines={setLines} business={business} />
+        <LineItems
+          mode="sale"
+          lines={lines}
+          setLines={setLines}
+          business={business}
+          taxType={taxType}
+          customerId={customerId || undefined}
+        />
         {lines.length > 0 && (
           <div className="mt-2 text-right text-sm text-gray-600">
-            含稅 {money(total)}（未稅 {money(total - taxFromTotal(total))}，稅額 {money(taxFromTotal(total))}）
+            含稅 {money(total)}（未稅 {money(t.subtotal)}，稅額 {money(t.tax)}）
             {cost !== null && <div>預估毛利 {money(total - cost)}</div>}
           </div>
         )}
       </div>
 
       <input type="hidden" name="items" value={JSON.stringify(items)} />
+      {fromOrder && <input type="hidden" name="orderId" value={fromOrder.id} />}
       <FormMessage state={state} />
       {missingSerial && <p className="text-sm text-amber-700">「{missingSerial.product.name}」需要選擇出貨序號</p>}
       {payment === "CREDIT" && !customerId && <p className="text-sm text-amber-700">月結請選擇客戶</p>}
       <button
         className="btn-primary w-full py-3 text-base sm:w-auto"
-        disabled={pending || !lines.length || !!missingSerial || (payment === "CREDIT" && !customerId)}
+        disabled={pending || !lines.length || !!missingSerial || !!zeroQty || (payment === "CREDIT" && !customerId)}
       >
         {pending ? "處理中…" : `確認銷貨 ${money(total)}`}
       </button>

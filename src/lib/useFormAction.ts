@@ -16,6 +16,9 @@ export function useFormAction(
     e.preventDefault();
     formRef.current = e.currentTarget;
     const fd = new FormData(e.currentTarget);
+    // 帶入按下的按鈕的 name/value（例如「儲存並成交」）
+    const btn = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    if (btn?.name) fd.set(btn.name, btn.value);
     startTransition(() => dispatch(fd));
   };
   useEffect(() => {

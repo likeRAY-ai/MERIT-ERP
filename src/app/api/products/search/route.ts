@@ -4,19 +4,9 @@ import { db } from "@/db";
 import { products, serialNumbers } from "@/db/schema";
 import { getSession, canSeeCost } from "@/lib/auth";
 import { normalizeSerial } from "@/lib/services/inventory";
+import { hitColumns, toHits } from "@/lib/services/products";
 
-export type ProductHit = {
-  id: number;
-  sku: string;
-  name: string;
-  unit: string;
-  trackSerial: boolean;
-  stockQty: number;
-  retailPrice: number;
-  businessPrice: number;
-  avgCost: number | null;
-  matchedSerial?: string; // 輸入的是在庫序號時，直接帶出
-};
+export type { ProductHit } from "@/lib/services/products";
 
 // 開單時搜尋商品：名稱、編號、品牌、條碼，或直接掃描在庫序號
 export async function GET(req: Request) {
@@ -24,30 +14,17 @@ export async function GET(req: Request) {
   if (!s) return NextResponse.json({ error: "未登入" }, { status: 401 });
   const q = new URL(req.url).searchParams.get("q")?.trim() ?? "";
   if (!q) return NextResponse.json([]);
-  const showCost = canSeeCost(s);
-
-  const cols = {
-    id: products.id,
-    sku: products.sku,
-    name: products.name,
-    unit: products.unit,
-    trackSerial: products.trackSerial,
-    stockQty: products.stockQty,
-    retailPrice: products.retailPrice,
-    businessPrice: products.businessPrice,
-    avgCost: products.avgCost,
-  };
 
   const serial = normalizeSerial(q);
   const [bySerial, rows] = await Promise.all([
     db
-      .select({ ...cols, matchedSerial: serialNumbers.serial })
+      .select({ ...hitColumns, matchedSerial: serialNumbers.serial })
       .from(serialNumbers)
       .innerJoin(products, eq(serialNumbers.productId, products.id))
       .where(and(eq(serialNumbers.serial, serial), eq(serialNumbers.status, "IN_STOCK")))
       .limit(5),
     db
-      .select(cols)
+      .select(hitColumns)
       .from(products)
       .where(
         and(
@@ -68,6 +45,5 @@ export async function GET(req: Request) {
   const exact = (p: { sku: string }) => p.sku.toUpperCase() === q.toUpperCase();
   rows.sort((a, b) => Number(exact(b)) - Number(exact(a)));
 
-  const hits: ProductHit[] = [...bySerial, ...rows].map((p) => ({ ...p, avgCost: showCost ? p.avgCost : null }));
-  return NextResponse.json(hits);
+  return NextResponse.json(await toHits(db, [...bySerial, ...rows], canSeeCost(s)));
 }

@@ -15,6 +15,7 @@ const itemsSchema = z.array(
     qty: z.number().int(),
     unitPrice: z.number().int(),
     serials: z.array(z.string()).default([]),
+    orderItemId: z.number().int().nullish(),
   }),
 );
 
@@ -34,6 +35,8 @@ export async function submitSale(_: ActionState, fd: FormData): Promise<ActionSt
         customerId: Number(fd.get("customerId")) || null,
         buyerTaxId: optStr(fd, "buyerTaxId"),
         paymentMethod: pm as (typeof PAYMENTS)[number],
+        taxType: String(fd.get("taxType")) === "EXCLUDED" ? "EXCLUDED" : "INCLUDED",
+        orderId: Number(fd.get("orderId")) || null,
         note: optStr(fd, "note"),
         items: parsed.data,
       },
@@ -41,6 +44,7 @@ export async function submitSale(_: ActionState, fd: FormData): Promise<ActionSt
     );
     id = sale.id;
     revalidatePath("/sales");
+    revalidatePath("/orders");
     revalidatePath("/products");
     revalidatePath("/");
   });

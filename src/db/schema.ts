@@ -10,6 +10,7 @@ import {
   timestamp,
   uniqueIndex,
   index,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -129,6 +130,9 @@ export const purchaseItems = pgTable("purchase_items", {
 // ───────── 銷貨 ─────────
 
 // CASH 現金、CARD 刷卡、TRANSFER 轉帳、CREDIT 月結
+// INCLUDED 含稅價（單價已含 5%）、EXCLUDED 外加稅（單價為未稅，另加 5%）
+export const taxTypeEnum = pgEnum("tax_type", ["INCLUDED", "EXCLUDED"]);
+
 export const paymentMethodEnum = pgEnum("payment_method", ["CASH", "CARD", "TRANSFER", "CREDIT"]);
 
 export const sales = pgTable("sales", {
@@ -141,6 +145,8 @@ export const sales = pgTable("sales", {
   taxAmount: integer("tax_amount").notNull().default(0), // 其中稅額（5%）
   costTotal: integer("cost_total").notNull().default(0), // 成本合計
   paymentMethod: paymentMethodEnum("payment_method").notNull().default("CASH"),
+  taxType: taxTypeEnum("tax_type").notNull().default("INCLUDED"),
+  orderId: integer("order_id").references((): AnyPgColumn => orders.id), // 由哪張訂單轉來
   note: text("note"),
   createdById: integer("created_by_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -155,8 +161,63 @@ export const saleItems = pgTable("sale_items", {
   qty: integer("qty").notNull(),
   unitPrice: integer("unit_price").notNull(),
   unitCost: integer("unit_cost").notNull(), // 銷售當下的平均成本，用來算毛利
-  subtotal: integer("subtotal").notNull(),
+  subtotal: integer("subtotal").notNull(), // 數量 × 單價（外加稅時為未稅金額）
+  orderItemId: integer("order_item_id").references((): AnyPgColumn => orderItems.id),
 });
+
+// ───────── 報價單／訂單 ─────────
+// 同一張單：報價中 → 成交（即訂單）→ 轉銷貨出貨。
+// QUOTE 報價中、CONFIRMED 已成交待出貨、COMPLETED 已出貨結案、CLOSED 手動結案、LOST 未成交
+export const orderStatusEnum = pgEnum("order_status", ["QUOTE", "CONFIRMED", "COMPLETED", "CLOSED", "LOST"]);
+
+export const orders = pgTable(
+  "orders",
+  {
+    id: serial("id").primaryKey(),
+    number: text("number").notNull().unique(), // 單號，例如 Q20261102-001
+    date: timestamp("date", { withTimezone: true }).notNull().defaultNow(),
+    validUntil: timestamp("valid_until", { withTimezone: true }), // 報價有效期限
+    status: orderStatusEnum("status").notNull().default("QUOTE"),
+    customerId: integer("customer_id").references(() => customers.id),
+    customerName: text("customer_name"), // 未建檔客戶的名稱
+    contact: text("contact"), // 聯絡人
+    phone: text("phone"),
+    buyerTaxId: text("buyer_tax_id"),
+    salespersonId: integer("salesperson_id").references(() => users.id), // 業務人員
+    customerPo: text("customer_po"), // 客戶訂單號
+    paymentTerms: text("payment_terms"), // 付款條件
+    deliveryDate: timestamp("delivery_date", { withTimezone: true }), // 交貨日期
+    taxType: taxTypeEnum("tax_type").notNull().default("INCLUDED"),
+    subtotal: integer("subtotal").notNull().default(0), // 未稅合計
+    taxAmount: integer("tax_amount").notNull().default(0),
+    total: integer("total").notNull().default(0), // 含稅總額
+    note: text("note"),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdById: integer("created_by_id").notNull().references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("orders_status_idx").on(t.status), index("orders_customer_idx").on(t.customerId)],
+);
+
+export const orderItems = pgTable(
+  "order_items",
+  {
+    id: serial("id").primaryKey(),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    productId: integer("product_id").notNull().references(() => products.id),
+    description: text("description"), // 補充說明（列印在報價單上）
+    qty: integer("qty").notNull(),
+    unitPrice: integer("unit_price").notNull(), // 依單據的稅別：含稅價或未稅價
+    subtotal: integer("subtotal").notNull(),
+    shippedQty: integer("shipped_qty").notNull().default(0), // 已出貨數量
+    sort: integer("sort").notNull().default(0),
+  },
+  (t) => [index("order_items_product_idx").on(t.productId)],
+);
 
 // ───────── 序號 ─────────
 
@@ -234,6 +295,7 @@ export const purchaseItemsRelations = relations(purchaseItems, ({ one, many }) =
 
 export const salesRelations = relations(sales, ({ one, many }) => ({
   customer: one(customers, { fields: [sales.customerId], references: [customers.id] }),
+  order: one(orders, { fields: [sales.orderId], references: [orders.id] }),
   createdBy: one(users, { fields: [sales.createdById], references: [users.id] }),
   items: many(saleItems),
 }));
@@ -241,7 +303,21 @@ export const salesRelations = relations(sales, ({ one, many }) => ({
 export const saleItemsRelations = relations(saleItems, ({ one, many }) => ({
   sale: one(sales, { fields: [saleItems.saleId], references: [sales.id] }),
   product: one(products, { fields: [saleItems.productId], references: [products.id] }),
+  orderItem: one(orderItems, { fields: [saleItems.orderItemId], references: [orderItems.id] }),
   serials: many(serialNumbers),
+}));
+
+export const ordersRelations = relations(orders, ({ one, many }) => ({
+  customer: one(customers, { fields: [orders.customerId], references: [customers.id] }),
+  salesperson: one(users, { fields: [orders.salespersonId], references: [users.id]}),
+  createdBy: one(users, { fields: [orders.createdById], references: [users.id]}),
+  items: many(orderItems),
+  sales: many(sales),
+}));
+
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  order: one(orders, { fields: [orderItems.orderId], references: [orders.id] }),
+  product: one(products, { fields: [orderItems.productId], references: [products.id] }),
 }));
 
 export const serialNumbersRelations = relations(serialNumbers, ({ one }) => ({
@@ -258,7 +334,7 @@ export const stockMovementsRelations = relations(stockMovements, ({ one }) => ({
   createdBy: one(users, { fields: [stockMovements.createdById], references: [users.id] }),
 }));
 
-export const customersRelations = relations(customers, ({ many }) => ({ sales: many(sales) }));
+export const customersRelations = relations(customers, ({ many }) => ({ sales: many(sales), orders: many(orders) }));
 export const suppliersRelations = relations(suppliers, ({ many }) => ({
   purchases: many(purchases),
 }));

@@ -30,7 +30,13 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
       <PageHeader
         title={c.name}
         back="/customers"
-        actions={<Link href={`/sales/new?customer=${c.id}`} className="btn-primary">＋ 為此客戶開單</Link>}
+        actions={
+          <>
+            <Link href={`/orders?q=${encodeURIComponent(c.name)}`} className="btn">報價／訂單</Link>
+            <Link href={`/orders/new?customer=${c.id}`} className="btn">＋ 開報價單</Link>
+            <Link href={`/sales/new?customer=${c.id}`} className="btn-primary">＋ 開銷貨單</Link>
+          </>
+        }
       />
       <PartyForm action={saveCustomer.bind(null, c.id)} party={c} isCustomer readOnly={s.role === "ACCOUNTANT"} />
       <section>

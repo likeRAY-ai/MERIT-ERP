@@ -1,8 +1,8 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { DB, Tx } from "@/db";
-import { products, purchases, purchaseItems, sales, saleItems, serialNumbers, stockMovements, customers, suppliers } from "@/db/schema";
+import { products, purchases, purchaseItems, sales, saleItems, serialNumbers, stockMovements, customers, suppliers, orders, orderItems } from "@/db/schema";
 import { AppError } from "@/lib/errors";
-import { addMonths, taxFromTotal } from "@/lib/format";
+import { addMonths, calcTotals, type TaxType } from "@/lib/format";
 import { nextNumber } from "./numbering";
 
 // 序號統一格式：去除前後空白、轉大寫
@@ -148,9 +148,11 @@ export type SaleInput = {
   customerId?: number | null;
   buyerTaxId?: string | null;
   paymentMethod: "CASH" | "CARD" | "TRANSFER" | "CREDIT";
+  taxType?: TaxType; // 預設含稅
+  orderId?: number | null; // 由訂單轉銷貨
   date?: Date;
   note?: string | null;
-  items: (LineInput & { unitPrice: number })[];
+  items: (LineInput & { unitPrice: number; orderItemId?: number | null })[];
 };
 
 export async function createSale(db: DB, input: SaleInput, userId: number) {
@@ -165,6 +167,8 @@ export async function createSale(db: DB, input: SaleInput, userId: number) {
   const taxId = input.buyerTaxId?.trim() || null;
   if (taxId && !/^\d{8}$/.test(taxId)) throw new AppError("統一編號必須是 8 位數字");
   const date = input.date ?? new Date();
+  const taxType: TaxType = input.taxType ?? "INCLUDED";
+  if (taxType !== "INCLUDED" && taxType !== "EXCLUDED") throw new AppError("請選擇稅別");
 
   return db.transaction(async (tx) => {
     if (input.customerId) {
@@ -209,8 +213,39 @@ export async function createSale(db: DB, input: SaleInput, userId: number) {
       }
     }
 
+    // 由訂單出貨：檢查剩餘待出數量
+    const orderItemRows = new Map<number, typeof orderItems.$inferSelect>();
+    if (input.orderId) {
+      const [o] = await tx.select().from(orders).where(eq(orders.id, input.orderId)).for("update");
+      if (!o) throw new AppError("找不到訂單");
+      if (o.status !== "CONFIRMED") throw new AppError("訂單必須是「已成交」才能出貨");
+      if (taxType !== o.taxType) throw new AppError("稅別必須和訂單相同");
+      const rows = await tx.select().from(orderItems).where(eq(orderItems.orderId, o.id));
+      rows.forEach((r) => orderItemRows.set(r.id, r));
+      const want = new Map<number, number>();
+      for (const l of lines) {
+        if (!l.orderItemId) continue;
+        const oi = orderItemRows.get(l.orderItemId);
+        if (!oi || oi.productId !== l.productId) throw new AppError("訂單明細不符");
+        want.set(oi.id, (want.get(oi.id) ?? 0) + l.qty);
+      }
+      for (const [oiId, q] of want) {
+        const oi = orderItemRows.get(oiId)!;
+        const left = oi.qty - oi.shippedQty;
+        if (q > left) {
+          throw new AppError(`「${map.get(oi.productId)!.name}」超過訂單待出貨數量：剩 ${left}，本次 ${q}`);
+        }
+      }
+    } else if (lines.some((l) => l.orderItemId)) {
+      throw new AppError("訂單明細不符");
+    }
+
     const number = await nextNumber(tx, "S", "sales", date);
-    const total = lines.reduce((s, l) => s + l.qty * l.unitPrice, 0);
+    const totals = calcTotals(
+      lines.reduce((s, l) => s + l.qty * l.unitPrice, 0),
+      taxType,
+    );
+    const total = totals.total;
     const costTotal = lines.reduce((s, l) => s + l.qty * map.get(l.productId)!.avgCost, 0);
 
     const [sale] = await tx
@@ -221,9 +256,11 @@ export async function createSale(db: DB, input: SaleInput, userId: number) {
         customerId: input.customerId || null,
         buyerTaxId: taxId,
         total,
-        taxAmount: taxFromTotal(total),
+        taxAmount: totals.tax,
         costTotal,
         paymentMethod: input.paymentMethod,
+        taxType,
+        orderId: input.orderId || null,
         note: input.note || null,
         createdById: userId,
       })
@@ -241,8 +278,15 @@ export async function createSale(db: DB, input: SaleInput, userId: number) {
           unitPrice: l.unitPrice,
           unitCost: p.avgCost,
           subtotal: l.qty * l.unitPrice,
+          orderItemId: l.orderItemId || null,
         })
         .returning();
+
+      if (l.orderItemId) {
+        const oi = orderItemRows.get(l.orderItemId)!;
+        oi.shippedQty += l.qty;
+        await tx.update(orderItems).set({ shippedQty: oi.shippedQty }).where(eq(orderItems.id, oi.id));
+      }
 
       await tx.update(products).set({ stockQty: newQty, updatedAt: new Date() }).where(eq(products.id, p.id));
       map.set(p.id, { ...p, stockQty: newQty });
@@ -269,6 +313,14 @@ export async function createSale(db: DB, input: SaleInput, userId: number) {
         refNumber: number,
         createdById: userId,
       });
+    }
+
+    // 訂單全部出貨完成 → 自動結案
+    if (input.orderId && [...orderItemRows.values()].every((oi) => oi.shippedQty >= oi.qty)) {
+      await tx
+        .update(orders)
+        .set({ status: "COMPLETED", closedAt: new Date(), updatedAt: new Date() })
+        .where(eq(orders.id, input.orderId));
     }
 
     return sale;

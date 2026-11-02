@@ -83,3 +83,49 @@ export const MOVEMENT_LABELS: Record<string, string> = {
 export function taxFromTotal(total: number): number {
   return Math.round(total - total / 1.05);
 }
+
+// ───────── 稅別 ─────────
+export type TaxType = "INCLUDED" | "EXCLUDED";
+
+export const TAX_TYPE_LABELS: Record<TaxType, string> = {
+  INCLUDED: "含稅",
+  EXCLUDED: "外加稅",
+};
+
+// 由「數量 × 單價」的合計，依稅別算出未稅、稅額、含稅總額
+export function calcTotals(lineSum: number, taxType: TaxType) {
+  if (taxType === "EXCLUDED") {
+    const tax = Math.round(lineSum * 0.05);
+    return { subtotal: lineSum, tax, total: lineSum + tax };
+  }
+  const tax = taxFromTotal(lineSum);
+  return { subtotal: lineSum - tax, tax, total: lineSum };
+}
+
+// 切換稅別時換算單價
+export function convertPrice(price: number, from: TaxType, to: TaxType): number {
+  if (from === to) return price;
+  return to === "EXCLUDED" ? Math.round(price / 1.05) : Math.round(price * 1.05);
+}
+
+// ───────── 報價單／訂單狀態 ─────────
+export const ORDER_STATUS_LABELS: Record<string, string> = {
+  QUOTE: "報價中",
+  CONFIRMED: "已成交・待出貨",
+  COMPLETED: "已出貨結案",
+  CLOSED: "手動結案",
+  LOST: "未成交",
+};
+
+// yyyy-mm-dd（台灣日期），給 <input type="date"> 使用
+export function isoDate(d: Date | string | null | undefined): string {
+  if (!d) return "";
+  const s = ymd(new Date(d));
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+}
+
+// 把 <input type="date"> 的值轉成台灣當天 00:00
+export function parseDateInput(v: string | null | undefined): Date | null {
+  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  return new Date(`${v}T00:00:00+08:00`);
+}

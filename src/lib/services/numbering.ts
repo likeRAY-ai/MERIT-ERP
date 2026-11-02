@@ -6,8 +6,8 @@ import { ymd } from "@/lib/format";
 // 使用 advisory lock 避免兩人同時開單拿到同一號碼
 export async function nextNumber(
   tx: Tx,
-  prefix: "P" | "S",
-  table: "purchases" | "sales",
+  prefix: "P" | "S" | "Q",
+  table: "purchases" | "sales" | "orders",
   date: Date,
 ): Promise<string> {
   const base = `${prefix}${ymd(date)}-`;

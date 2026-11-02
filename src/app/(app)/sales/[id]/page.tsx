@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { sales } from "@/db/schema";
 import { requireUser, canSeeCost } from "@/lib/auth";
-import { money, dateStr, dateTimeStr, PAYMENT_LABELS } from "@/lib/format";
+import { money, dateStr, dateTimeStr, PAYMENT_LABELS, TAX_TYPE_LABELS } from "@/lib/format";
 import { PageHeader } from "@/components/ui";
 import PrintButton from "@/components/PrintButton";
 
@@ -23,7 +23,7 @@ export default async function SalePage({
   const { created } = await searchParams;
   const s = await db.query.sales.findFirst({
     where: eq(sales.id, id),
-    with: { customer: true, createdBy: true, items: { with: { product: true, serials: true } } },
+    with: { customer: true, createdBy: true, order: true, items: { with: { product: true, serials: true } } },
   });
   if (!s) notFound();
 
@@ -55,13 +55,17 @@ export default async function SalePage({
           <div><div className="text-gray-500">付款方式</div>{PAYMENT_LABELS[s.paymentMethod]}</div>
           <div><div className="text-gray-500">統編</div>{s.buyerTaxId ?? "—"}</div>
           <div><div className="text-gray-500">經手人</div>{s.createdBy.name}</div>
-          <div className="col-span-2"><div className="text-gray-500">建立時間</div>{dateTimeStr(s.createdAt)}</div>
+          <div><div className="text-gray-500">稅別</div>{TAX_TYPE_LABELS[s.taxType]}</div>
+          {s.order && (
+            <div><div className="text-gray-500">來源訂單</div><Link href={`/orders/${s.order.id}`} className="link">{s.order.number}</Link></div>
+          )}
+          <div><div className="text-gray-500">建立時間</div>{dateTimeStr(s.createdAt)}</div>
         </div>
         {s.note && <p className="text-sm"><span className="text-gray-500">備註：</span>{s.note}</p>}
 
         <table className="table">
           <thead>
-            <tr><th>商品</th><th className="text-right">數量</th><th className="text-right">單價</th><th className="text-right">小計</th></tr>
+            <tr><th>商品</th><th className="text-right">數量</th><th className="text-right">{s.taxType === "EXCLUDED" ? "單價（未稅）" : "單價"}</th><th className="text-right">小計</th></tr>
           </thead>
           <tbody>
             {s.items.map((it) => (
