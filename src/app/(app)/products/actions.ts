@@ -19,6 +19,7 @@ export async function saveProduct(id: number | null, _: ActionState, fd: FormDat
     const data = {
       sku,
       barcode,
+      altCode: optStr(fd, "altCode"),
       name: required(fd, "name", "商品名稱"),
       brand: optStr(fd, "brand"),
       spec: optStr(fd, "spec"),

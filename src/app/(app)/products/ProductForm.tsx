@@ -8,6 +8,7 @@ type P = {
   id: number;
   sku: string;
   barcode: string | null;
+  altCode?: string | null;
   name: string;
   brand: string | null;
   spec: string | null;
@@ -39,6 +40,9 @@ export default function ProductForm({
         </Field>
         <Field label="條碼">
           <input name="barcode" defaultValue={p?.barcode ?? ""} className="input" />
+        </Field>
+        <Field label="輔助編號" hint="舊系統的輔助編號，可用來搜尋">
+          <input name="altCode" defaultValue={p?.altCode ?? ""} className="input" />
         </Field>
         <Field label="商品名稱 *" className="sm:col-span-2">
           <input name="name" defaultValue={p?.name} className="input" required />

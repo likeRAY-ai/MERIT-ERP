@@ -20,7 +20,7 @@ export default async function ProductsPage({
   const where: SQL[] = [];
   if (q) {
     const like = `%${q}%`;
-    where.push(or(ilike(products.name, like), ilike(products.sku, like), ilike(products.brand, like), eq(products.barcode, q))!);
+    where.push(or(ilike(products.name, like), ilike(products.sku, like), ilike(products.brand, like), ilike(products.altCode, like), eq(products.barcode, q))!);
   }
   if (cat) where.push(eq(products.categoryId, Number(cat)));
   if (!all) where.push(eq(products.active, true));

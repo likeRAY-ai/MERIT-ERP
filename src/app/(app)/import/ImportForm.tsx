@@ -24,6 +24,7 @@ export default function ImportForm() {
           <span className="label">資料種類</span>
           <select name="kind" className="input max-w-xs" defaultValue="customers">
             <option value="customers">客戶基本資料</option>
+            <option value="products">商品（產品）基本資料</option>
           </select>
         </label>
         <label className="block">
@@ -46,13 +47,14 @@ export default function ImportForm() {
       {p && !state?.done && (
         <div className="card space-y-3">
           <h2 className="font-semibold">預覽結果</h2>
-          <ul className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+          <ul className="grid grid-cols-3 gap-2 text-sm">
             <li className="rounded-lg bg-gray-50 p-2">可匯入<div className="text-xl font-bold">{p.total}</div></li>
             <li className="rounded-lg bg-gray-50 p-2">新增<div className="text-xl font-bold text-green-700">{p.newCount}</div></li>
             <li className="rounded-lg bg-gray-50 p-2">更新（編號已存在）<div className="text-xl font-bold text-blue-700">{p.updateCount}</div></li>
-            <li className="rounded-lg bg-gray-50 p-2">公司行號<div className="text-xl font-bold">{p.companies}</div></li>
           </ul>
-          <p className="text-xs text-gray-500">其中 {p.excluded} 位預設「外加稅」，開單時會自動帶入。</p>
+          <ul className="list-disc space-y-0.5 pl-5 text-sm text-gray-700">
+            {p.facts.map((f) => <li key={f}>{f}</li>)}
+          </ul>
           {p.skipped.length > 0 && (
             <details className="text-sm">
               <summary className="cursor-pointer text-amber-700">略過 {p.skipped.length} 列</summary>
@@ -63,12 +65,11 @@ export default function ImportForm() {
           )}
           <div className="overflow-x-auto">
             <table className="table">
-              <thead><tr><th>編號</th><th>名稱</th><th>類型</th><th>電話</th><th>統編</th></tr></thead>
+              <thead><tr>{p.columns.map((c) => <th key={c}>{c}</th>)}</tr></thead>
               <tbody>
                 {p.sample.map((r) => (
-                  <tr key={r.code}>
-                    <td>{r.code}</td><td>{r.name}</td><td>{r.type === "COMPANY" ? "公司" : "個人"}</td>
-                    <td>{r.phone ?? "—"}</td><td>{r.taxId ?? "—"}</td>
+                  <tr key={r[0]}>
+                    {r.map((v, i) => <td key={i}>{v}</td>)}
                   </tr>
                 ))}
               </tbody>
@@ -86,7 +87,7 @@ export default function ImportForm() {
           <p className="font-semibold text-green-800">
             匯入完成：新增 {state.done.inserted} 筆、更新 {state.done.updated} 筆
           </p>
-          <Link href="/customers" className="btn">查看客戶</Link>
+          <Link href={state.done.link} className="btn">{state.done.label}</Link>
         </div>
       )}
     </form>

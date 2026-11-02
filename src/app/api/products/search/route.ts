@@ -34,6 +34,7 @@ export async function GET(req: Request) {
             ilike(products.sku, `%${q}%`),
             ilike(products.name, `%${q}%`),
             ilike(products.brand, `%${q}%`),
+            ilike(products.altCode, `%${q}%`),
           ),
         ),
       )

@@ -82,3 +82,59 @@ test("匯入：新增後再匯入會更新，不會重複", async () => {
   assert.equal(a!.phone, "04-7654321");
   assert.equal(a!.createdAt.toISOString(), "2022-11-07T16:00:00.000Z");
 });
+
+// ───────── 商品 ─────────
+import { parseLegacyProducts, importProducts } from "../src/lib/services/importProducts";
+
+const PH = ["產品類別", "類別名稱", "產品編號", "輔助編號", "品名規格", "產品分類", "安全存量", "單    位", "包裝單位", "包裝數量", "進    價", "包裝進價", "售    價", "包裝售價", "標準成本", "包裝標準成本", "期初單位成本", "計算成本", "額外成本", "維修科目", "條碼格式", "條碼內容", "自 定 一", "備註", "圖檔名稱", "建檔日期", "最近進貨", "最近銷貨", "期初總數量", "期初總成本", "總庫存量"];
+const prow = (o: Record<string, string>) => PH.map((h) => o[h] ?? "");
+const prows = [
+  ["旭橙科技有限公司"],
+  ["產 品 基 本 資 料"],
+  PH,
+  prow({ 產品類別: "RAM", 類別名稱: "記憶體", 產品編號: "R1", 品名規格: "DDR5 16G", 產品分類: "單一商品", "單    位": "條", "進    價": "1000", 期初單位成本: "1050", "售    價": "1500", 建檔日期: "111/01/02", 總庫存量: "3" }),
+  // 被折成兩列的商品
+  prow({ 產品類別: "CPU", 產品編號: "C1", 品名規格: "I5", 產品分類: "單一商品", "單    位": "顆", 期初單位成本: "6000" }),
+  ["", "111/11/11", "111/11/12", "111/11/18", "0.00", "0.00", "-2.0"],
+  prow({ 產品類別: "ZZZ", 產品編號: "S1", 品名規格: "組裝工資", 產品分類: "單一商品", 維修科目: "Y", 建檔日期: "110/05/05" }),
+  prow({ 產品編號: "R1", 品名規格: "重複" }),
+  ["主管:   製表:"],
+];
+
+test("解析舊系統商品資料（含折行合併）", () => {
+  const { records, skipped, merged } = parseLegacyProducts(prows);
+  assert.equal(merged, 1);
+  assert.equal(records.length, 3);
+  assert.deepEqual(skipped.map((s) => s.reason), ["產品編號 R1 重複"]);
+  const [r1, c1, s1] = records;
+  assert.equal(r1.category, "記憶體");
+  assert.equal(r1.avgCost, 1050);
+  assert.equal(r1.retailPrice, 1500);
+  assert.equal(r1.stockQty, 3);
+  assert.equal(c1.stockQty, -2);
+  assert.equal(c1.createdAt!.toISOString(), "2022-11-10T16:00:00.000Z");
+  assert.equal(s1.category, "ZZZ");
+  assert.match(s1.note!, /維修／服務/);
+});
+
+test("匯入商品：新商品帶庫存與異動紀錄，再匯入只更新基本資料", async () => {
+  const [{ id: uid }] = await db
+    .insert(schema.users)
+    .values({ username: "imp", name: "匯入", passwordHash: "x", role: "OWNER" })
+    .returning();
+  const { records } = parseLegacyProducts(prows);
+  assert.deepEqual(await importProducts(db, records, uid), { inserted: 3, updated: 0 });
+  const r1 = await db.query.products.findFirst({ where: eq(schema.products.sku, "R1"), with: { category: true } });
+  assert.equal(r1!.stockQty, 3);
+  assert.equal(r1!.category!.name, "記憶體");
+  const moves = await db.select().from(schema.stockMovements);
+  assert.equal(moves.length, 2); // R1 +3、C1 -2
+  // 庫存改變後再匯入：不覆蓋庫存
+  await db.update(schema.products).set({ stockQty: 10 }).where(eq(schema.products.sku, "R1"));
+  records[0].name = "DDR5 16G 新名稱";
+  assert.deepEqual(await importProducts(db, records, uid), { inserted: 0, updated: 3 });
+  const again = await db.query.products.findFirst({ where: eq(schema.products.sku, "R1") });
+  assert.equal(again!.stockQty, 10);
+  assert.equal(again!.name, "DDR5 16G 新名稱");
+  assert.equal((await db.select().from(schema.stockMovements)).length, 2);
+});

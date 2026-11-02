@@ -45,6 +45,7 @@ export const products = pgTable(
     id: serial("id").primaryKey(),
     sku: text("sku").notNull().unique(), // 商品編號
     barcode: text("barcode").unique(),
+    altCode: text("alt_code"), // 輔助編號（舊系統）
     name: text("name").notNull(),
     brand: text("brand"),
     spec: text("spec"), // 規格說明
@@ -62,7 +63,7 @@ export const products = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("products_name_idx").on(t.name)],
+  (t) => [index("products_name_idx").on(t.name), index("products_alt_code_idx").on(t.altCode)],
 );
 
 // PERSONAL 一般消費者、COMPANY 公司行號
