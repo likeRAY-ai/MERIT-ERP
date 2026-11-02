@@ -234,7 +234,10 @@ export default async function OrderPage({
             {related.map((r) => (
               <li key={r.id} className="flex justify-between">
                 <Link href={`/sales/${r.id}`} className="link">{r.number}</Link>
-                <span className="text-gray-600">{dateTimeStr(r.date)}・{money(r.total)}</span>
+                <span className="text-gray-600">
+                  {dateTimeStr(r.date)}・{money(r.total)}
+                  {r.voidedAt && <span className="badge ml-1 bg-gray-200 text-gray-600">作廢</span>}
+                </span>
               </li>
             ))}
           </ul>

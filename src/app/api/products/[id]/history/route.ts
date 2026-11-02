@@ -44,7 +44,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
           .from(saleItems)
           .innerJoin(sales, eq(saleItems.saleId, sales.id))
           .leftJoin(customers, eq(sales.customerId, customers.id))
-          .where(and(eq(saleItems.productId, productId), eq(sales.customerId, customerId)))
+          .where(and(eq(saleItems.productId, productId), eq(sales.customerId, customerId), isNull(sales.voidedAt)))
           .orderBy(desc(sales.id))
           .limit(5)
       : Promise.resolve([]),
@@ -74,6 +74,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       .where(
         and(
           eq(saleItems.productId, productId),
+          isNull(sales.voidedAt),
           customerId ? or(isNull(sales.customerId), ne(sales.customerId, customerId)) : undefined,
         ),
       )

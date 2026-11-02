@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, desc, gte, lte, sql, eq } from "drizzle-orm";
+import { and, desc, gte, lte, sql, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { products, sales, customers, orders } from "@/db/schema";
 import { requireUser, canSeeCost } from "@/lib/auth";
@@ -14,7 +14,7 @@ async function salesSummary(from: Date) {
       cost: sql<number>`coalesce(sum(${sales.costTotal}),0)::int`,
     })
     .from(sales)
-    .where(gte(sales.date, from));
+    .where(and(gte(sales.date, from), isNull(sales.voidedAt)));
   return r;
 }
 
@@ -38,6 +38,7 @@ export default async function Dashboard() {
       .select({ id: sales.id, number: sales.number, date: sales.date, total: sales.total, customer: customers.name })
       .from(sales)
       .leftJoin(customers, eq(sales.customerId, customers.id))
+      .where(isNull(sales.voidedAt))
       .orderBy(desc(sales.id))
       .limit(8),
     db

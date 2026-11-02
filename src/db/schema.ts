@@ -159,6 +159,16 @@ export const sales = pgTable("sales", {
   paymentMethod: paymentMethodEnum("payment_method").notNull().default("CASH"),
   taxType: taxTypeEnum("tax_type").notNull().default("INCLUDED"),
   orderId: integer("order_id").references((): AnyPgColumn => orders.id), // 由哪張訂單轉來
+  salespersonId: integer("salesperson_id").references(() => users.id), // 業務人員
+  contact: text("contact"), // 聯絡人
+  deliveryMethod: text("delivery_method"), // 送貨方式：自取、送貨、宅配…
+  deliveryAddress: text("delivery_address"),
+  invoiceNo: text("invoice_no"), // 發票號碼
+  discount: integer("discount").notNull().default(0), // 折扣金額（依稅別：含稅或未稅）
+  paidAmount: integer("paid_amount").notNull().default(0), // 已收金額
+  voidedAt: timestamp("voided_at", { withTimezone: true }), // 作廢時間
+  voidedById: integer("voided_by_id").references(() => users.id),
+  voidReason: text("void_reason"),
   note: text("note"),
   createdById: integer("created_by_id").notNull().references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -307,6 +317,8 @@ export const purchaseItemsRelations = relations(purchaseItems, ({ one, many }) =
 
 export const salesRelations = relations(sales, ({ one, many }) => ({
   customer: one(customers, { fields: [sales.customerId], references: [customers.id] }),
+  salesperson: one(users, { fields: [sales.salespersonId], references: [users.id] }),
+  voidedBy: one(users, { fields: [sales.voidedById], references: [users.id] }),
   order: one(orders, { fields: [sales.orderId], references: [orders.id] }),
   createdBy: one(users, { fields: [sales.createdById], references: [users.id] }),
   items: many(saleItems),

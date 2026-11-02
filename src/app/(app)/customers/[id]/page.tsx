@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { customers, sales } from "@/db/schema";
 import { requireUser } from "@/lib/auth";
@@ -22,7 +22,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
     db
       .select({ count: sql<number>`count(*)::int`, total: sql<number>`coalesce(sum(${sales.total}),0)::int` })
       .from(sales)
-      .where(eq(sales.customerId, id)),
+      .where(and(eq(sales.customerId, id), isNull(sales.voidedAt))),
   ]);
 
   return (

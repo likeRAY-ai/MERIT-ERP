@@ -36,6 +36,13 @@
       "when": 1793598941021,
       "tag": "0004_supplier_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793599700747,
+      "tag": "0005_sale_fields",
+      "breakpoints": true
     }
   ]
 }
