@@ -91,9 +91,9 @@ test("進貨：重複序號會被擋下", async () => {
   );
 });
 
-test("銷貨：庫存不足、序號錯誤會被擋下", async () => {
+test("銷貨：序號商品庫存不足、序號錯誤會被擋下", async () => {
   await assert.rejects(
-    createSale(db, { paymentMethod: "CASH", items: [{ productId: cableId, qty: 11, unitPrice: 200 }] }, userId),
+    createSale(db, { paymentMethod: "CASH", items: [{ productId: gpuId, qty: 4, unitPrice: 1, serials: ["A", "B", "C", "D"] }] }, userId),
     /庫存不足/,
   );
   await assert.rejects(
@@ -153,16 +153,28 @@ test("庫存調整：一般商品可調整，序號商品不行，並留下異�
   );
 });
 
-test("同時開多張銷貨單不會超賣", async () => {
-  // 線材剩 7，同時賣 5 張各 2 條，最多只能成功 3 張
+test("同時開多張銷貨單：一般商品允許負庫存，數量與單號都正確", async () => {
+  // 線材剩 7，同時賣 5 張各 2 條 → 庫存 -3
   const results = await Promise.allSettled(
     Array.from({ length: 5 }, () =>
       createSale(db, { paymentMethod: "CASH", items: [{ productId: cableId, qty: 2, unitPrice: 200 }] }, userId),
     ),
   );
   const ok = results.filter((r) => r.status === "fulfilled");
-  assert.equal(ok.length, 3);
-  assert.equal((await getProduct(cableId))!.stockQty, 1);
+  assert.equal(ok.length, 5);
+  assert.equal((await getProduct(cableId))!.stockQty, -3);
   const numbers = ok.map((r) => (r as PromiseFulfilledResult<{ number: string }>).value.number);
-  assert.equal(new Set(numbers).size, 3);
+  assert.equal(new Set(numbers).size, 5);
+  const moves = await db.query.stockMovements.findMany({ where: eq(schema.stockMovements.productId, cableId) });
+  assert.deepEqual(
+    moves.filter((m) => m.type === "SALE").map((m) => m.balanceAfter).slice(-5).sort((a, b) => b - a),
+    [5, 3, 1, -1, -3],
+  );
+});
+
+test("負庫存後進貨：庫存補回、平均成本以進價為準", async () => {
+  await createPurchase(db, { supplierId, items: [{ productId: cableId, qty: 10, unitCost: 90 }] }, userId);
+  const p = (await getProduct(cableId))!;
+  assert.equal(p.stockQty, 7);
+  assert.equal(p.avgCost, 90);
 });

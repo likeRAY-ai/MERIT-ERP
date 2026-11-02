@@ -129,3 +129,14 @@ export function parseDateInput(v: string | null | undefined): Date | null {
   if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
   return new Date(`${v}T00:00:00+08:00`);
 }
+
+// 統一編號檢查碼（財政部規則：加權和可被 5 整除；第 7 碼為 7 時另有規則）
+export function isValidTaxId(t: string | null | undefined): boolean {
+  if (!t || !/^\d{8}$/.test(t)) return false;
+  const w = [1, 2, 1, 2, 1, 2, 4, 1];
+  const sum = w.reduce((s, x, i) => {
+    const p = Number(t[i]) * x;
+    return s + Math.floor(p / 10) + (p % 10);
+  }, 0);
+  return sum % 5 === 0 || (t[6] === "7" && (sum + 1) % 5 === 0);
+}

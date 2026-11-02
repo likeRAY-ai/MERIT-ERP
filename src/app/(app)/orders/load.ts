@@ -17,6 +17,9 @@ export async function formOptions() {
         taxId: customers.taxId,
         contact: customers.contact,
         phone: customers.phone,
+        mobile: customers.mobile,
+        code: customers.code,
+        taxType: customers.taxType,
       })
       .from(customers)
       .where(eq(customers.active, true))

@@ -18,7 +18,16 @@ export default async function NewSalePage({
   const s = await requireUser(["OWNER", "STAFF"]);
   const { customer, order } = await searchParams;
   const list = await db
-    .select({ id: customers.id, name: customers.name, type: customers.type, taxId: customers.taxId, phone: customers.phone })
+    .select({
+      id: customers.id,
+      name: customers.name,
+      type: customers.type,
+      taxId: customers.taxId,
+      phone: customers.phone,
+      mobile: customers.mobile,
+      code: customers.code,
+      taxType: customers.taxType,
+    })
     .from(customers)
     .where(eq(customers.active, true))
     .orderBy(asc(customers.name));

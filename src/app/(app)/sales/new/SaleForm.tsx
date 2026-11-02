@@ -7,7 +7,16 @@ import { Field, FormMessage } from "@/components/FormState";
 import { money, calcTotals, convertPrice, type TaxType } from "@/lib/format";
 import { submitSale } from "../actions";
 
-type C = { id: number; name: string; type: "PERSONAL" | "COMPANY"; taxId: string | null; phone: string | null };
+type C = {
+  id: number;
+  name: string;
+  type: "PERSONAL" | "COMPANY";
+  taxId: string | null;
+  phone: string | null;
+  mobile: string | null;
+  code: string | null;
+  taxType: TaxType | null;
+};
 
 export type FromOrder = {
   id: number;
@@ -59,13 +68,22 @@ export default function SaleForm({
   }
 
   const shown = filter
-    ? customers.filter((c) => c.name.includes(filter) || c.phone?.includes(filter) || c.taxId?.includes(filter))
+    ? customers.filter(
+        (c) =>
+          c.name.includes(filter) ||
+          c.phone?.includes(filter) ||
+          c.mobile?.includes(filter) ||
+          c.taxId?.includes(filter) ||
+          c.code?.includes(filter),
+      )
     : customers;
 
   function pickCustomer(id: number | "") {
     setCustomerId(id);
     const c = customers.find((x) => x.id === id);
     setTaxId(c?.taxId ?? "");
+    // 客戶有設定預設稅別時自動切換（一般門市散客維持含稅）
+    if (c?.taxType) changeTax(c.taxType);
   }
 
   return (
@@ -94,7 +112,7 @@ export default function SaleForm({
               <option key={c.id} value={c.id}>
                 {c.name}
                 {c.type === "COMPANY" ? "（公司）" : ""}
-                {c.phone ? ` ${c.phone}` : ""}
+                {c.phone || c.mobile ? ` ${c.phone ?? c.mobile}` : ""}
               </option>
             ))}
           </select>

@@ -68,22 +68,33 @@ export const products = pgTable(
 // PERSONAL 一般消費者、COMPANY 公司行號
 export const customerTypeEnum = pgEnum("customer_type", ["PERSONAL", "COMPANY"]);
 
+// INCLUDED 含稅價（單價已含 5%）、EXCLUDED 外加稅（單價為未稅，另加 5%）
+export const taxTypeEnum = pgEnum("tax_type", ["INCLUDED", "EXCLUDED"]);
+
 export const customers = pgTable(
   "customers",
   {
     id: serial("id").primaryKey(),
+    code: text("code").unique(), // 客戶編號（舊系統匯入）
     type: customerTypeEnum("type").notNull().default("PERSONAL"),
     name: text("name").notNull(),
     taxId: text("tax_id"), // 統一編號
     contact: text("contact"), // 聯絡人
     phone: text("phone"),
+    mobile: text("mobile"), // 手機
+    fax: text("fax"),
     email: text("email"),
+    taxType: taxTypeEnum("tax_type"), // 預設稅別（空白依客戶類型）
     address: text("address"),
     note: text("note"),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("customers_name_idx").on(t.name), index("customers_phone_idx").on(t.phone)],
+  (t) => [
+    index("customers_name_idx").on(t.name),
+    index("customers_phone_idx").on(t.phone),
+    index("customers_mobile_idx").on(t.mobile),
+  ],
 );
 
 export const suppliers = pgTable(
@@ -130,9 +141,6 @@ export const purchaseItems = pgTable("purchase_items", {
 // ───────── 銷貨 ─────────
 
 // CASH 現金、CARD 刷卡、TRANSFER 轉帳、CREDIT 月結
-// INCLUDED 含稅價（單價已含 5%）、EXCLUDED 外加稅（單價為未稅，另加 5%）
-export const taxTypeEnum = pgEnum("tax_type", ["INCLUDED", "EXCLUDED"]);
-
 export const paymentMethodEnum = pgEnum("payment_method", ["CASH", "CARD", "TRANSFER", "CREDIT"]);
 
 export const sales = pgTable("sales", {

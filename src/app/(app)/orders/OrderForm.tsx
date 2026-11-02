@@ -14,6 +14,9 @@ export type OrderCustomer = {
   taxId: string | null;
   contact: string | null;
   phone: string | null;
+  mobile: string | null;
+  code: string | null;
+  taxType: TaxType | null;
 };
 
 export type OrderInit = {
@@ -34,6 +37,11 @@ export type OrderInit = {
   note: string;
   lines: Line[];
 };
+
+// 客戶的預設稅別；沒設定時公司行號外加稅、個人含稅
+export function defaultTaxType(c: { type: string; taxType: TaxType | null }): TaxType {
+  return c.taxType ?? (c.type === "COMPANY" ? "EXCLUDED" : "INCLUDED");
+}
 
 const TERMS = ["現金", "刷卡", "匯款", "貨到付款", "訂金 30%，交貨付清", "月結 30 天", "月結 60 天"];
 
@@ -71,16 +79,23 @@ export default function OrderForm({
   const isQuote = !init.status || init.status === "QUOTE";
 
   const shown = filter
-    ? customers.filter((c) => c.name.includes(filter) || c.phone?.includes(filter) || c.taxId?.includes(filter))
+    ? customers.filter(
+        (c) =>
+          c.name.includes(filter) ||
+          c.phone?.includes(filter) ||
+          c.mobile?.includes(filter) ||
+          c.taxId?.includes(filter) ||
+          c.code?.includes(filter),
+      )
     : customers;
 
   function pickCustomer(id: number | "") {
     setCustomerId(id);
     const c = customers.find((x) => x.id === id);
     setContact(c?.contact ?? "");
-    setPhone(c?.phone ?? "");
+    setPhone(c?.phone ?? c?.mobile ?? "");
     setTaxId(c?.taxId ?? "");
-    if (c?.type === "COMPANY" && taxType === "INCLUDED" && !lines.length) setTaxType("EXCLUDED");
+    if (c) changeTax(defaultTaxType(c));
   }
 
   function changeTax(next: TaxType) {
@@ -117,7 +132,7 @@ export default function OrderForm({
               <option key={c.id} value={c.id}>
                 {c.name}
                 {c.type === "COMPANY" ? "（公司）" : ""}
-                {c.phone ? ` ${c.phone}` : ""}
+                {c.phone || c.mobile ? ` ${c.phone ?? c.mobile}` : ""}
               </option>
             ))}
           </select>

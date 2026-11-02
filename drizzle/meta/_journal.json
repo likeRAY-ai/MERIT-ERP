@@ -15,6 +15,13 @@
       "when": 1793593620266,
       "tag": "0001_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793595482534,
+      "tag": "0002_customer_fields",
+      "breakpoints": true
     }
   ]
 }

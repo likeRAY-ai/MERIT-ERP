@@ -7,6 +7,10 @@ import { Field, FormMessage } from "./FormState";
 
 type Party = {
   type?: "PERSONAL" | "COMPANY";
+  code?: string | null;
+  mobile?: string | null;
+  fax?: string | null;
+  taxType?: "INCLUDED" | "EXCLUDED" | null;
   name: string;
   taxId: string | null;
   contact: string | null;
@@ -44,6 +48,20 @@ export default function PartyForm({
         <Field label="名稱 *" className={isCustomer ? "" : "sm:col-span-2"}>
           <input name="name" defaultValue={p?.name} className="input" required />
         </Field>
+        {isCustomer && (
+          <>
+            <Field label="客戶編號" hint="選填，舊系統的客戶編號">
+              <input name="code" defaultValue={p?.code ?? ""} className="input" />
+            </Field>
+            <Field label="開單預設稅別">
+              <select name="taxType" defaultValue={p?.taxType ?? ""} className="input">
+                <option value="">依類型（公司外加稅、個人含稅）</option>
+                <option value="INCLUDED">含稅價</option>
+                <option value="EXCLUDED">外加稅 5%</option>
+              </select>
+            </Field>
+          </>
+        )}
         <Field label="統一編號">
           <input name="taxId" defaultValue={p?.taxId ?? ""} className="input" inputMode="numeric" maxLength={8} />
         </Field>
@@ -53,6 +71,16 @@ export default function PartyForm({
         <Field label="電話">
           <input name="phone" defaultValue={p?.phone ?? ""} className="input" inputMode="tel" />
         </Field>
+        {isCustomer && (
+          <>
+            <Field label="手機">
+              <input name="mobile" defaultValue={p?.mobile ?? ""} className="input" inputMode="tel" />
+            </Field>
+            <Field label="傳真">
+              <input name="fax" defaultValue={p?.fax ?? ""} className="input" inputMode="tel" />
+            </Field>
+          </>
+        )}
         <Field label="Email">
           <input name="email" type="email" defaultValue={p?.email ?? ""} className="input" />
         </Field>

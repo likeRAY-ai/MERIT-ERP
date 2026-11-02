@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    // 資料匯入需要上傳 Excel 檔
+    serverActions: { bodySizeLimit: "4mb" },
+  },
 };
 
 export default nextConfig;

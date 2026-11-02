@@ -186,9 +186,10 @@ export async function createSale(db: DB, input: SaleInput, userId: number) {
       return { ...it, serials, product: p };
     });
 
+    // 一般商品允許負庫存（先賣後補進貨）；序號商品必須有在庫序號才能出貨
     for (const [pid, q] of needQty) {
       const p = map.get(pid)!;
-      if (p.stockQty < q) throw new AppError(`「${p.name}」庫存不足：目前 ${p.stockQty}，需要 ${q}`);
+      if (p.trackSerial && p.stockQty < q) throw new AppError(`「${p.name}」庫存不足：目前 ${p.stockQty}，需要 ${q}`);
     }
 
     // 檢查序號都在庫
@@ -341,8 +342,7 @@ export async function adjustStock(
     const p = map.get(input.productId);
     if (!p) throw new AppError("找不到商品");
     if (p.trackSerial) throw new AppError("序號商品請透過進貨或銷貨處理，不能直接調整數量");
-    const newQty = p.stockQty + input.qty;
-    if (newQty < 0) throw new AppError("調整後庫存不可小於 0");
+    const newQty = p.stockQty + input.qty; // 一般商品允許負庫存
     await tx.update(products).set({ stockQty: newQty, updatedAt: new Date() }).where(eq(products.id, p.id));
     await tx.insert(stockMovements).values({
       productId: p.id,

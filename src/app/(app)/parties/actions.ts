@@ -1,7 +1,7 @@
 "use server";
 
 // 客戶與供應商的新增、修改
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
@@ -29,7 +29,21 @@ export async function saveCustomer(id: number | null, _: ActionState, fd: FormDa
   let newId: number | null = null;
   const res = await runAction(async () => {
     await requireActionUser(["OWNER", "STAFF"]);
-    const data = { ...common(fd), type: fd.get("type") === "COMPANY" ? ("COMPANY" as const) : ("PERSONAL" as const) };
+    const tt = String(fd.get("taxType"));
+    const data = {
+      ...common(fd),
+      type: fd.get("type") === "COMPANY" ? ("COMPANY" as const) : ("PERSONAL" as const),
+      code: optStr(fd, "code"),
+      mobile: optStr(fd, "mobile"),
+      fax: optStr(fd, "fax"),
+      taxType: tt === "INCLUDED" || tt === "EXCLUDED" ? (tt as "INCLUDED" | "EXCLUDED") : null,
+    };
+    if (data.code) {
+      const dup = await db.query.customers.findFirst({
+        where: and(eq(customers.code, data.code), id ? ne(customers.id, id) : undefined),
+      });
+      if (dup) throw new AppError(`客戶編號 ${data.code} 已被「${dup.name}」使用`);
+    }
     if (id) {
       await db.update(customers).set(data).where(eq(customers.id, id));
     } else {

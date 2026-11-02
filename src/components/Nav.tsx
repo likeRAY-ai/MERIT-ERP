@@ -36,7 +36,12 @@ export default function Nav({ name, roleLabel, isOwner }: { name: string; roleLa
   const [open, setOpen] = useState(false);
   const items = [
     ...MAIN,
-    ...(isOwner ? [{ href: "/users", label: "帳號管理", icon: "🔐" }] : []),
+    ...(isOwner
+      ? [
+          { href: "/users", label: "帳號管理", icon: "🔐" },
+          { href: "/import", label: "資料匯入", icon: "📥" },
+        ]
+      : []),
     { href: "/account", label: "修改密碼", icon: "🔑" },
   ];
 

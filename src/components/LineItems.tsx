@@ -317,7 +317,13 @@ function LineCard({
           <div className="mt-2 text-base font-semibold text-gray-900">{money(l.qty * l.price)}</div>
         </div>
       </div>
-      {lowStock && <p className="mt-1 text-xs text-red-600">庫存不足</p>}
+      {lowStock && (
+        <p className="mt-1 text-xs text-red-600">
+          {p.trackSerial
+            ? "庫存不足"
+            : `庫存不足，出貨後庫存會是 ${p.stockQty - l.qty}，請記得補登進貨`}
+        </p>
+      )}
       {mode === "order" && l.qty > free && (
         <p className="mt-1 text-xs text-amber-700">
           可用量 {Math.max(free, 0)}，缺 {l.qty - Math.max(free, 0)}，成交後需叫貨
