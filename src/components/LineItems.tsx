@@ -10,6 +10,7 @@ import Link from "next/link";
 import type { ProductHit } from "@/lib/services/products";
 import type { PriceHistory, PriceRow } from "@/app/api/products/[id]/history/route";
 import { money, dateStr, convertPrice, type TaxType } from "@/lib/format";
+import ProductPicker from "./ProductPicker";
 
 export type Line = {
   key: string;
@@ -51,6 +52,7 @@ export default function LineItems({
   const [hits, setHits] = useState<ProductHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
+  const [browsing, setBrowsing] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -79,7 +81,7 @@ export default function LineItems({
     return () => clearTimeout(timer.current);
   }, [q]);
 
-  function add(p: ProductHit) {
+  function add(p: ProductHit, fromPicker = false) {
     setMsg("");
     // 銷貨時掃描到的是序號：加到該商品的明細
     if (mode === "sale" && p.matchedSerial) {
@@ -115,10 +117,14 @@ export default function LineItems({
         ];
       });
     }
+    if (fromPicker) return;
     setQ("");
     setHits([]);
     inputRef.current?.focus();
   }
+
+  const addedIds = new Map<number, number>();
+  for (const l of lines) addedIds.set(l.product.id, (addedIds.get(l.product.id) ?? 0) + Math.max(l.qty, 1));
 
   async function onEnter() {
     const list = hits.length ? hits : await search(q);
@@ -138,7 +144,7 @@ export default function LineItems({
 
   return (
     <div className="space-y-3">
-      <div className="relative">
+      <div className="relative flex gap-2">
         <input
           ref={inputRef}
           value={q}
@@ -153,9 +159,12 @@ export default function LineItems({
           className="input"
           autoComplete="off"
         />
-        {loading && <span className="absolute top-2.5 right-3 text-xs text-gray-400">搜尋中…</span>}
+        <button type="button" className="btn shrink-0" onClick={() => setBrowsing(true)}>
+          📋 瀏覽商品
+        </button>
+        {loading && <span className="absolute top-2.5 right-32 text-xs text-gray-400">搜尋中…</span>}
         {hits.length > 0 && (
-          <ul className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+          <ul className="absolute top-full z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
             {hits.map((h) => (
               <li key={`${h.id}-${h.matchedSerial ?? ""}`}>
                 <button
@@ -168,7 +177,10 @@ export default function LineItems({
                     <span className="ml-1 text-xs text-gray-500">{h.sku}</span>
                     {h.matchedSerial && <span className="badge ml-1 bg-green-100 text-green-800">序號 {h.matchedSerial}</span>}
                   </span>
-                  <span className="shrink-0 text-xs text-gray-500">庫存 {h.stockQty}</span>
+                  <span className="shrink-0 text-right text-xs text-gray-500">
+                    庫存 {h.stockQty}
+                    {mode !== "purchase" && h.retailPrice > 0 && <span className="ml-2 text-gray-800">{money(h.retailPrice)}</span>}
+                  </span>
                 </button>
               </li>
             ))}
@@ -176,6 +188,17 @@ export default function LineItems({
         )}
       </div>
       {msg && <p className="text-sm text-amber-700">{msg}</p>}
+      {browsing && (
+        <ProductPicker
+          onAdd={(p) => add(p, true)}
+          onClose={() => {
+            setBrowsing(false);
+            inputRef.current?.focus();
+          }}
+          addedIds={addedIds}
+          business={business && mode !== "purchase"}
+        />
+      )}
 
       {lines.length === 0 && <p className="py-6 text-center text-sm text-gray-500">尚未加入商品</p>}
 
