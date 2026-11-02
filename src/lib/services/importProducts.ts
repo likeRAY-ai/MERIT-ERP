@@ -15,6 +15,7 @@ export type ProductRecord = {
   avgCost: number;
   stockQty: number;
   safetyStock: number;
+  isService: boolean; // 維修科目或租賃類：不計庫存
   note: string | null;
   createdAt: Date | null;
 };
@@ -140,15 +141,17 @@ export function parseLegacyProducts(rows: unknown[][]): ProductParseResult {
       norm(r[C.service]) === "Y" ? "維修／服務項目" : null,
     ].filter(Boolean);
 
+    const isService = norm(r[C.service]) === "Y" || code === "Lease";
     records.push({
       sku,
+      isService,
       altCode: alt,
       name: name ?? alt ?? `舊系統商品 ${sku}`,
       category,
       unit: String(r[C.unit] ?? "").trim() || "個",
       retailPrice: Math.round(num(r[C.price])),
       avgCost: Math.round(unitCost),
-      stockQty: Math.round(num(r[C.stock])),
+      stockQty: isService ? 0 : Math.round(num(r[C.stock])),
       safetyStock: Math.max(0, Math.round(num(r[C.safety]))),
       note: extra.join("\n") || null,
       createdAt: rocDate(val(r[C.created])),
@@ -199,6 +202,7 @@ export async function importProducts(db: DB, records: ProductRecord[], userId: n
             avgCost: r.avgCost,
             stockQty: r.stockQty,
             safetyStock: r.safetyStock,
+            isService: r.isService,
             note: r.note,
             createdAt: r.createdAt ?? new Date(),
           })),
@@ -233,6 +237,7 @@ export async function importProducts(db: DB, records: ProductRecord[], userId: n
           unit: r.unit,
           retailPrice: r.retailPrice,
           safetyStock: r.safetyStock,
+          isService: r.isService,
           note: r.note,
           updatedAt: new Date(),
         })

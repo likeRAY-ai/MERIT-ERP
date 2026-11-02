@@ -5,6 +5,7 @@ import { products, sales, customers, orders } from "@/db/schema";
 import { requireUser, canSeeCost } from "@/lib/auth";
 import { money, dateTimeStr, startOfTaipeiDay, ymd } from "@/lib/format";
 import { TableWrap, Empty } from "@/components/ui";
+import { dueContracts } from "@/lib/services/rentals";
 
 async function salesSummary(from: Date) {
   const [r] = await db
@@ -25,7 +26,7 @@ export default async function Dashboard() {
   const d = ymd();
   const monthStart = new Date(`${d.slice(0, 4)}-${d.slice(4, 6)}-01T00:00:00+08:00`);
 
-  const [todaySum, monthSum, lowStock, recent, orderCounts] = await Promise.all([
+  const [todaySum, monthSum, lowStock, recent, orderCounts, rentalDue] = await Promise.all([
     salesSummary(today),
     salesSummary(monthStart),
     db
@@ -46,6 +47,7 @@ export default async function Dashboard() {
       .from(orders)
       .where(sql`${orders.status} in ('QUOTE','CONFIRMED')`)
       .groupBy(orders.status),
+    dueContracts(db, today),
   ]);
   const quoteCount = orderCounts.find((c) => c.status === "QUOTE")?.count ?? 0;
   const pendingCount = orderCounts.find((c) => c.status === "CONFIRMED")?.count ?? 0;
@@ -70,6 +72,13 @@ export default async function Dashboard() {
           </div>
         ))}
       </div>
+
+      {rentalDue.length > 0 && (
+        <Link href="/rentals?tab=due" className="card block border-red-200 bg-red-50 hover:bg-red-100">
+          <div className="text-sm text-red-700">租金應開帳</div>
+          <div className="mt-1 text-2xl font-bold text-red-700">{rentalDue.length} 份租約</div>
+        </Link>
+      )}
 
       {(quoteCount > 0 || pendingCount > 0) && (
         <div className="grid grid-cols-2 gap-3">

@@ -15,6 +15,7 @@ type P = {
   unit: string;
   categoryId: number | null;
   trackSerial: boolean;
+  isService?: boolean;
   warrantyMonths: number;
   retailPrice: number;
   businessPrice: number;
@@ -80,6 +81,10 @@ export default function ProductForm({
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="trackSerial" defaultChecked={p?.trackSerial ?? false} className="h-4 w-4" />
             需要序號管理（進貨、銷貨時要輸入序號）
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="isService" defaultChecked={p?.isService ?? false} className="h-4 w-4" />
+            服務／費用項目，不計庫存（例如組裝工資、維修費、租金）
           </label>
           {p && (
             <label className="flex items-center gap-2 text-sm">

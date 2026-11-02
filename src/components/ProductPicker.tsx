@@ -128,7 +128,11 @@ export default function ProductPicker({
                       )}
                     </button>
                     <div className="hidden w-28 shrink-0 text-right text-xs sm:block">
-                      <div className={p.stockQty <= 0 ? "text-red-600" : "text-gray-900"}>庫存 {p.stockQty} {p.unit}</div>
+                      {p.isService ? (
+                        <div className="text-gray-500">服務項目</div>
+                      ) : (
+                        <div className={p.stockQty <= 0 ? "text-red-600" : "text-gray-900"}>庫存 {p.stockQty} {p.unit}</div>
+                      )}
                       {p.reservedQty > 0 && <div className="text-amber-700">預訂 {p.reservedQty}・可用 {free}</div>}
                     </div>
                     <div className="hidden w-28 shrink-0 text-right text-xs sm:block">
@@ -146,7 +150,7 @@ export default function ProductPicker({
                   </div>
                   {/* 手機：庫存與價格放在下面 */}
                   <div className="mt-1 flex gap-3 text-xs sm:hidden">
-                    <span className={p.stockQty <= 0 ? "text-red-600" : ""}>庫存 {p.stockQty}</span>
+                    <span className={p.stockQty <= 0 && !p.isService ? "text-red-600" : ""}>{p.isService ? "服務項目" : `庫存 ${p.stockQty}`}</span>
                     {p.reservedQty > 0 && <span className="text-amber-700">可用 {free}</span>}
                     <span className="font-semibold">{price ? money(price) : "未定價"}</span>
                     {p.avgCost !== null && <span className="text-gray-500">成本 {money(p.avgCost)}</span>}

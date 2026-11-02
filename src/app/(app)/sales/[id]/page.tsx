@@ -114,6 +114,7 @@ export default async function SalePage({
                 <tr key={it.id}>
                   <td className="min-w-40">
                     {it.product.name}
+                    {it.description && <div className="text-xs text-gray-700">{it.description}</div>}
                     {it.serials.length > 0 && (
                       <div className="mt-1 text-xs text-gray-600">
                         序號：<span className="font-mono">{it.serials.map((x) => x.serial).join("、")}</span>
@@ -121,7 +122,7 @@ export default async function SalePage({
                       </div>
                     )}
                   </td>
-                  <td className="whitespace-nowrap text-right">{it.qty} {it.product.unit}</td>
+                  <td className="whitespace-nowrap text-right">{it.qty}{it.product.isService ? "" : ` ${it.product.unit}`}</td>
                   <td className="text-right">{money(it.unitPrice)}</td>
                   <td className="text-right">{money(it.subtotal)}</td>
                 </tr>

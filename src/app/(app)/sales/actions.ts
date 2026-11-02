@@ -16,6 +16,7 @@ const itemsSchema = z.array(
     unitPrice: z.number().int(),
     serials: z.array(z.string()).default([]),
     orderItemId: z.number().int().nullish(),
+    description: z.string().nullish(),
   }),
 );
 

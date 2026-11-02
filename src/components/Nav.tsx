@@ -11,6 +11,7 @@ const MAIN: Item[] = [
   { href: "/", label: "首頁", icon: "🏠" },
   { href: "/orders", label: "報價／訂單", icon: "📝" },
   { href: "/sales", label: "銷貨", icon: "🧾" },
+  { href: "/rentals", label: "租賃", icon: "🔁" },
   { href: "/purchases", label: "進貨", icon: "📦" },
   { href: "/products", label: "商品", icon: "🖥️" },
   { href: "/inventory", label: "庫存", icon: "📊" },

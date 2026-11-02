@@ -1,6 +1,6 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { DB, Tx } from "@/db";
-import { products, purchases, purchaseItems, sales, saleItems, serialNumbers, stockMovements, customers, suppliers, orders, orderItems } from "@/db/schema";
+import { products, purchases, purchaseItems, sales, saleItems, serialNumbers, stockMovements, customers, suppliers, orders, orderItems, rentalBills, rentalContracts } from "@/db/schema";
 import { AppError } from "@/lib/errors";
 import { addMonths, calcTotals, type TaxType } from "@/lib/format";
 import { nextNumber } from "./numbering";
@@ -99,6 +99,13 @@ export async function createPurchase(db: DB, input: PurchaseInput, userId: numbe
 
     for (const l of lines) {
       const p = map.get(l.productId)!;
+      if (p.isService) {
+        // 服務項目只記錄進貨明細，不計庫存與成本
+        await tx
+          .insert(purchaseItems)
+          .values({ purchaseId: purchase.id, productId: p.id, qty: l.qty, unitCost: l.unitCost, subtotal: l.qty * l.unitCost });
+        continue;
+      }
       const newQty = p.stockQty + l.qty;
       // 移動平均成本；若原本庫存為負或 0，直接以本次進價為準
       const newAvg =
@@ -159,7 +166,7 @@ export type SaleInput = {
   paidAmount?: number | null; // 已收金額；未填時：月結 0，其他全額
   date?: Date;
   note?: string | null;
-  items: (LineInput & { unitPrice: number; orderItemId?: number | null })[];
+  items: (LineInput & { unitPrice: number; orderItemId?: number | null; description?: string | null })[];
 };
 
 export async function createSale(db: DB, input: SaleInput, userId: number) {
@@ -258,7 +265,8 @@ export async function createSale(db: DB, input: SaleInput, userId: number) {
     const paid = input.paidAmount ?? (input.paymentMethod === "CREDIT" ? 0 : total);
     if (!Number.isInteger(paid) || paid < 0) throw new AppError("已收金額必須是 0 以上的整數");
     if (paid > total) throw new AppError(`已收金額不可大於應收總計 ${total}`);
-    const costTotal = lines.reduce((s, l) => s + l.qty * map.get(l.productId)!.avgCost, 0);
+    const unitCostOf = (pid: number) => (map.get(pid)!.isService ? 0 : map.get(pid)!.avgCost);
+    const costTotal = lines.reduce((s, l) => s + l.qty * unitCostOf(l.productId), 0);
 
     const [sale] = await tx
       .insert(sales)
@@ -295,9 +303,10 @@ export async function createSale(db: DB, input: SaleInput, userId: number) {
           productId: p.id,
           qty: l.qty,
           unitPrice: l.unitPrice,
-          unitCost: p.avgCost,
+          unitCost: p.isService ? 0 : p.avgCost,
           subtotal: l.qty * l.unitPrice,
           orderItemId: l.orderItemId || null,
+          description: l.description?.trim() || null,
         })
         .returning();
 
@@ -306,6 +315,8 @@ export async function createSale(db: DB, input: SaleInput, userId: number) {
         oi.shippedQty += l.qty;
         await tx.update(orderItems).set({ shippedQty: oi.shippedQty }).where(eq(orderItems.id, oi.id));
       }
+
+      if (p.isService) continue; // 服務項目不計庫存
 
       await tx.update(products).set({ stockQty: newQty, updatedAt: new Date() }).where(eq(products.id, p.id));
       map.set(p.id, { ...p, stockQty: newQty });
@@ -354,6 +365,23 @@ export async function voidSale(db: DB, saleId: number, reason: string, userId: n
     const [sale] = await tx.select().from(sales).where(eq(sales.id, saleId)).for("update");
     if (!sale) throw new AppError("找不到銷貨單");
     if (sale.voidedAt) throw new AppError("這張銷貨單已經作廢");
+
+    // 租金帳單：只能從最新一期往回作廢，作廢後該期可重新開帳
+    const [bill] = await tx.select().from(rentalBills).where(eq(rentalBills.saleId, saleId));
+    if (bill) {
+      const [latest] = await tx
+        .select()
+        .from(rentalBills)
+        .where(eq(rentalBills.contractId, bill.contractId))
+        .orderBy(desc(rentalBills.periodStart))
+        .limit(1);
+      if (latest.id !== bill.id) throw new AppError("請先作廢這份租約較新一期的租金帳單");
+      await tx.delete(rentalBills).where(eq(rentalBills.id, bill.id));
+      await tx
+        .update(rentalContracts)
+        .set({ nextBillDate: bill.periodStart })
+        .where(eq(rentalContracts.id, bill.contractId));
+    }
     const items = await tx.select().from(saleItems).where(eq(saleItems.saleId, saleId));
     const map = await lockProducts(tx, [...new Set(items.map((i) => i.productId))]);
 
@@ -369,6 +397,7 @@ export async function voidSale(db: DB, saleId: number, reason: string, userId: n
 
     for (const it of items) {
       const p = map.get(it.productId)!;
+      if (p.isService) continue;
       const sn = serials.filter((x) => x.saleItemId === it.id).map((x) => x.serial);
       const newQty = p.stockQty + it.qty;
       const newAvg =
@@ -455,6 +484,7 @@ export async function adjustStock(
     const p = map.get(input.productId);
     if (!p) throw new AppError("找不到商品");
     if (p.trackSerial) throw new AppError("序號商品請透過進貨或銷貨處理，不能直接調整數量");
+    if (p.isService) throw new AppError("服務項目不計庫存");
     const newQty = p.stockQty + input.qty; // 一般商品允許負庫存
     await tx.update(products).set({ stockQty: newQty, updatedAt: new Date() }).where(eq(products.id, p.id));
     await tx.insert(stockMovements).values({

@@ -26,6 +26,7 @@ export async function saveProduct(id: number | null, _: ActionState, fd: FormDat
       unit: str(fd, "unit") || "個",
       categoryId: Number(str(fd, "categoryId")) || null,
       trackSerial: fd.get("trackSerial") === "on",
+      isService: fd.get("isService") === "on",
       warrantyMonths: int(fd, "warrantyMonths", "保固月數"),
       retailPrice: int(fd, "retailPrice", "零售價"),
       businessPrice: int(fd, "businessPrice", "公司價"),
@@ -35,6 +36,7 @@ export async function saveProduct(id: number | null, _: ActionState, fd: FormDat
       updatedAt: new Date(),
     };
 
+    if (data.isService && data.trackSerial) throw new AppError("服務項目不能同時設定序號管理");
     const dupSku = await db.query.products.findFirst({
       where: id ? and(eq(products.sku, sku), ne(products.id, id)) : eq(products.sku, sku),
     });
@@ -52,7 +54,11 @@ export async function saveProduct(id: number | null, _: ActionState, fd: FormDat
       if (cur.trackSerial !== data.trackSerial && cur.stockQty !== 0) {
         throw new AppError("商品還有庫存時，不能變更「序號管理」設定");
       }
-      await db.update(products).set(data).where(eq(products.id, id));
+      // 改成服務項目時，庫存歸零（服務項目不計庫存）
+      await db
+        .update(products)
+        .set(data.isService ? { ...data, stockQty: 0 } : data)
+        .where(eq(products.id, id));
     } else {
       const [p] = await db.insert(products).values(data).returning({ id: products.id });
       newId = p.id;

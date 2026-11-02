@@ -278,7 +278,7 @@ function LineCard({
     onChange({ serials: next, qty: next.length });
   }
 
-  const lowStock = mode === "sale" && l.qty > p.stockQty;
+  const lowStock = mode === "sale" && !p.isService && l.qty > p.stockQty;
   const free = p.stockQty - p.reservedQty; // 扣除其他已成交訂單後的可用量
   const needSerial = p.trackSerial && mode !== "order";
 
@@ -288,7 +288,7 @@ function LineCard({
         <div>
           <div className="font-medium">{p.name}</div>
           <div className="text-xs text-gray-500">
-            {p.sku}・庫存 {p.stockQty}
+            {p.sku}・{p.isService ? "服務項目（不計庫存）" : `庫存 ${p.stockQty}`}
             {mode !== "purchase" && p.reservedQty > 0 && `・訂單預訂 ${p.reservedQty}`}
             {mode !== "purchase" && p.avgCost !== null && `・成本 ${money(p.avgCost)}`}
           </div>
@@ -347,7 +347,7 @@ function LineCard({
             : `庫存不足，出貨後庫存會是 ${p.stockQty - l.qty}，請記得補登進貨`}
         </p>
       )}
-      {mode === "order" && l.qty > free && (
+      {mode === "order" && !p.isService && l.qty > free && (
         <p className="mt-1 text-xs text-amber-700">
           可用量 {Math.max(free, 0)}，缺 {l.qty - Math.max(free, 0)}，成交後需叫貨
         </p>

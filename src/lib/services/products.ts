@@ -10,6 +10,7 @@ export type ProductHit = {
   spec: string | null;
   unit: string;
   trackSerial: boolean;
+  isService: boolean;
   stockQty: number;
   reservedQty: number; // 已成交訂單尚未出貨的數量
   retailPrice: number;
@@ -25,6 +26,7 @@ export const hitColumns = {
   spec: products.spec,
   unit: products.unit,
   trackSerial: products.trackSerial,
+  isService: products.isService,
   stockQty: products.stockQty,
   retailPrice: products.retailPrice,
   businessPrice: products.businessPrice,

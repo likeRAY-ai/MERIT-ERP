@@ -140,3 +140,55 @@ export function isValidTaxId(t: string | null | undefined): boolean {
   }, 0);
   return sum % 5 === 0 || (t[6] === "7" && (sum + 1) % 5 === 0);
 }
+
+// ───────── 台灣日期計算（以台灣當天 00:00 表示一天） ─────────
+function twParts(d: Date) {
+  const s = ymd(d);
+  return { y: Number(s.slice(0, 4)), m: Number(s.slice(4, 6)), d: Number(s.slice(6, 8)) };
+}
+function twDate(y: number, m: number, d: number) {
+  return new Date(`${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T00:00:00+08:00`);
+}
+
+// 加 n 個月（月底自動對齊，例如 1/31 + 1 個月 = 2/28）
+export function addMonthsTW(d: Date, n: number): Date {
+  const p = twParts(d);
+  const total = p.y * 12 + (p.m - 1) + n;
+  const y = Math.floor(total / 12);
+  const m = (total % 12) + 1;
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return twDate(y, m, Math.min(p.d, last));
+}
+
+export function addDaysTW(d: Date, n: number): Date {
+  const p = twParts(d);
+  const t = new Date(Date.UTC(p.y, p.m - 1, p.d + n));
+  return twDate(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate());
+}
+
+// 兩個日期相差幾個月（只看年月）
+export function monthsDiffTW(a: Date, b: Date): number {
+  const pa = twParts(a);
+  const pb = twParts(b);
+  return (pb.y - pa.y) * 12 + (pb.m - pa.m);
+}
+
+// 包含頭尾的天數
+export function daysInclusiveTW(a: Date, b: Date): number {
+  const pa = twParts(a);
+  const pb = twParts(b);
+  return Math.round((Date.UTC(pb.y, pb.m - 1, pb.d) - Date.UTC(pa.y, pa.m - 1, pa.d)) / 86400_000) + 1;
+}
+
+// ───────── 租賃 ─────────
+export const ASSET_STATUS_LABELS: Record<string, string> = {
+  AVAILABLE: "可出租",
+  RENTED: "出租中",
+  MAINTENANCE: "維修中",
+  RETIRED: "停用",
+};
+
+export function billingLabel(c: { billingType: string; billingMonths: number }) {
+  if (c.billingType === "DAILY") return "按天計租";
+  return c.billingMonths === 1 ? "每月收款" : `每 ${c.billingMonths} 個月收一次`;
+}

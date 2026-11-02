@@ -18,7 +18,7 @@ export default async function InventoryPage({
   const showCost = canSeeCost(s);
   const { view = "instock", cat } = await searchParams;
 
-  const where: SQL[] = [eq(products.active, true)];
+  const where: SQL[] = [eq(products.active, true), eq(products.isService, false)];
   if (view === "instock") where.push(gt(products.stockQty, 0));
   if (view === "low") where.push(sql`${products.safetyStock} > 0`, lte(products.stockQty, products.safetyStock));
   if (cat) where.push(eq(products.categoryId, Number(cat)));
@@ -46,7 +46,7 @@ export default async function InventoryPage({
         value: sql<number>`coalesce(sum(${products.stockQty} * ${products.avgCost}),0)::bigint`,
       })
       .from(products)
-      .where(and(eq(products.active, true), gt(products.stockQty, 0))),
+      .where(and(eq(products.active, true), eq(products.isService, false), gt(products.stockQty, 0))),
   ]);
 
   const tabs = [

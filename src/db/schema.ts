@@ -52,6 +52,7 @@ export const products = pgTable(
     unit: text("unit").notNull().default("個"),
     categoryId: integer("category_id").references(() => categories.id),
     trackSerial: boolean("track_serial").notNull().default(false), // 是否需要序號管理
+    isService: boolean("is_service").notNull().default(false), // 服務／費用項目（工資、租金），不計庫存
     warrantyMonths: integer("warranty_months").notNull().default(12), // 保固月數
     retailPrice: integer("retail_price").notNull().default(0), // 零售價（含稅）
     businessPrice: integer("business_price").notNull().default(0), // 公司行號價（含稅），0 表示同零售價
@@ -185,6 +186,7 @@ export const saleItems = pgTable("sale_items", {
   unitCost: integer("unit_cost").notNull(), // 銷售當下的平均成本，用來算毛利
   subtotal: integer("subtotal").notNull(), // 數量 × 單價（外加稅時為未稅金額）
   orderItemId: integer("order_item_id").references((): AnyPgColumn => orderItems.id),
+  description: text("description"), // 補充說明（例如租金期間、設備編號）
 });
 
 // ───────── 報價單／訂單 ─────────
@@ -250,6 +252,7 @@ export const serialStatusEnum = pgEnum("serial_status", [
   "RETURNED",
   "RMA",
   "SCRAPPED",
+  "RENTAL", // 轉為出租設備
 ]);
 
 export const serialNumbers = pgTable(
@@ -364,4 +367,117 @@ export const suppliersRelations = relations(suppliers, ({ many }) => ({
 }));
 export const categoriesRelations = relations(categories, ({ many }) => ({
   products: many(products),
+}));
+
+// ───────── 租賃 ─────────
+
+// AVAILABLE 可出租、RENTED 出租中、MAINTENANCE 維修中、RETIRED 停用
+export const assetStatusEnum = pgEnum("asset_status", ["AVAILABLE", "RENTED", "MAINTENANCE", "RETIRED"]);
+
+// 出租設備：每台一筆，以編號（序號）追蹤
+export const rentalAssets = pgTable(
+  "rental_assets",
+  {
+    id: serial("id").primaryKey(),
+    code: text("code").notNull().unique(), // 設備編號／序號
+    name: text("name").notNull(), // 例如：文書機 i5/8G/256G
+    status: assetStatusEnum("status").notNull().default("AVAILABLE"),
+    monthlyRate: integer("monthly_rate").notNull().default(0), // 預設月租
+    dailyRate: integer("daily_rate").notNull().default(0), // 預設日租
+    cost: integer("cost").notNull().default(0), // 設備成本
+    serialId: integer("serial_id").references(() => serialNumbers.id), // 由庫存序號轉入
+    acquiredAt: timestamp("acquired_at", { withTimezone: true }),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("rental_assets_status_idx").on(t.status)],
+);
+
+// MONTHLY 按月（可一次收多個月）、DAILY 按天
+export const billingTypeEnum = pgEnum("billing_type", ["MONTHLY", "DAILY"]);
+// ACTIVE 租約中、ENDED 已結束
+export const contractStatusEnum = pgEnum("contract_status", ["ACTIVE", "ENDED"]);
+
+export const rentalContracts = pgTable(
+  "rental_contracts",
+  {
+    id: serial("id").primaryKey(),
+    number: text("number").notNull().unique(), // 租約編號，例如 R20261102-001
+    customerId: integer("customer_id").notNull().references(() => customers.id),
+    contact: text("contact"),
+    phone: text("phone"),
+    address: text("address"), // 設備放置地點
+    salespersonId: integer("salesperson_id").references(() => users.id),
+    billingType: billingTypeEnum("billing_type").notNull().default("MONTHLY"),
+    billingMonths: integer("billing_months").notNull().default(1), // 每次收幾個月
+    startDate: timestamp("start_date", { withTimezone: true }).notNull(),
+    endDate: timestamp("end_date", { withTimezone: true }), // 約定到期日（按天必填；按月可空白＝不定期）
+    nextBillDate: timestamp("next_bill_date", { withTimezone: true }), // 下一期起始日；空白＝已收完
+    taxType: taxTypeEnum("tax_type").notNull().default("INCLUDED"),
+    paymentMethod: paymentMethodEnum("payment_method").notNull().default("CREDIT"),
+    deposit: integer("deposit").notNull().default(0),
+    depositReceivedAt: timestamp("deposit_received_at", { withTimezone: true }),
+    depositRefund: integer("deposit_refund"), // 退還金額（可扣損壞）
+    depositRefundedAt: timestamp("deposit_refunded_at", { withTimezone: true }),
+    status: contractStatusEnum("status").notNull().default("ACTIVE"),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    note: text("note"),
+    createdById: integer("created_by_id").notNull().references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("rental_contracts_status_idx").on(t.status), index("rental_contracts_customer_idx").on(t.customerId)],
+);
+
+export const rentalItems = pgTable(
+  "rental_items",
+  {
+    id: serial("id").primaryKey(),
+    contractId: integer("contract_id")
+      .notNull()
+      .references(() => rentalContracts.id, { onDelete: "cascade" }),
+    assetId: integer("asset_id").notNull().references(() => rentalAssets.id),
+    rate: integer("rate").notNull(), // 每台月租或日租（依租約稅別）
+    startDate: timestamp("start_date", { withTimezone: true }).notNull(),
+    returnedAt: timestamp("returned_at", { withTimezone: true }), // 收回日期
+  },
+  (t) => [index("rental_items_asset_idx").on(t.assetId)],
+);
+
+// 每期帳單（對應自動產生的銷貨單）
+export const rentalBills = pgTable(
+  "rental_bills",
+  {
+    id: serial("id").primaryKey(),
+    contractId: integer("contract_id")
+      .notNull()
+      .references(() => rentalContracts.id, { onDelete: "cascade" }),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    saleId: integer("sale_id").notNull().references(() => sales.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("rental_bills_period_unique").on(t.contractId, t.periodStart)],
+);
+
+export const rentalAssetsRelations = relations(rentalAssets, ({ one, many }) => ({
+  serial: one(serialNumbers, { fields: [rentalAssets.serialId], references: [serialNumbers.id] }),
+  items: many(rentalItems),
+}));
+
+export const rentalContractsRelations = relations(rentalContracts, ({ one, many }) => ({
+  customer: one(customers, { fields: [rentalContracts.customerId], references: [customers.id] }),
+  salesperson: one(users, { fields: [rentalContracts.salespersonId], references: [users.id] }),
+  createdBy: one(users, { fields: [rentalContracts.createdById], references: [users.id] }),
+  items: many(rentalItems),
+  bills: many(rentalBills),
+}));
+
+export const rentalItemsRelations = relations(rentalItems, ({ one }) => ({
+  contract: one(rentalContracts, { fields: [rentalItems.contractId], references: [rentalContracts.id] }),
+  asset: one(rentalAssets, { fields: [rentalItems.assetId], references: [rentalAssets.id] }),
+}));
+
+export const rentalBillsRelations = relations(rentalBills, ({ one }) => ({
+  contract: one(rentalContracts, { fields: [rentalBills.contractId], references: [rentalContracts.id] }),
+  sale: one(sales, { fields: [rentalBills.saleId], references: [sales.id] }),
 }));
