@@ -12,11 +12,13 @@ export default function AssetChooser({
   daily,
   picked,
   setPicked,
+  rateHint,
 }: {
   assets: FreeAsset[];
   daily: boolean;
   picked: Picked[];
   setPicked: (p: Picked[]) => void;
+  rateHint?: Record<string, number>; // 報價單上的租金（依設備名稱）
 }) {
   const [q, setQ] = useState("");
   const shown = q ? assets.filter((a) => a.code.includes(q.toUpperCase()) || a.name.includes(q)) : assets;
@@ -24,7 +26,7 @@ export default function AssetChooser({
     setPicked(
       picked.some((p) => p.assetId === a.id)
         ? picked.filter((p) => p.assetId !== a.id)
-        : [...picked, { assetId: a.id, rate: daily ? a.dailyRate : a.monthlyRate }],
+        : [...picked, { assetId: a.id, rate: rateHint?.[a.name] ?? (daily ? a.dailyRate : a.monthlyRate) }],
     );
   if (!assets.length) return <p className="text-sm text-amber-700">目前沒有可出租的設備，請先到「出租設備」新增。</p>;
   return (

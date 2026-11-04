@@ -8,6 +8,7 @@ import {
   rentalBills,
   rentalContracts,
   rentalItems,
+  rentalQuotes,
   serialNumbers,
   stockMovements,
 } from "@/db/schema";
@@ -141,6 +142,7 @@ export type ContractInput = {
   depositReceived?: boolean;
   note?: string | null;
   items: { assetId: number; rate: number }[];
+  quoteId?: number | null; // 由租賃報價單轉入
 };
 
 export async function createContract(db: DB, input: ContractInput, userId: number) {
@@ -195,6 +197,15 @@ export async function createContract(db: DB, input: ContractInput, userId: numbe
       input.items.map((it) => ({ contractId: k.id, assetId: it.assetId, rate: it.rate, startDate: input.startDate })),
     );
     await tx.update(rentalAssets).set({ status: "RENTED" }).where(inArray(rentalAssets.id, ids));
+    if (input.quoteId) {
+      const [q] = await tx.select().from(rentalQuotes).where(eq(rentalQuotes.id, input.quoteId)).for("update");
+      if (!q) throw new AppError("找不到租賃報價單");
+      if (q.status !== "QUOTE") throw new AppError(`報價單 ${q.number} 已${q.status === "ACCEPTED" ? "轉成租約" : "標記未成交"}`);
+      await tx
+        .update(rentalQuotes)
+        .set({ status: "ACCEPTED", contractId: k.id, customerId: input.customerId, customerName: null, updatedAt: new Date() })
+        .where(eq(rentalQuotes.id, q.id));
+    }
     return k;
   });
 }

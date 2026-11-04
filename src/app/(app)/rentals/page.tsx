@@ -68,6 +68,7 @@ export default async function RentalsPage({ searchParams }: { searchParams: Prom
         title="租賃"
         actions={
           <>
+            <Link href="/rentals/quotes" className="btn">租賃報價單</Link>
             <Link href="/rentals/assets" className="btn">出租設備</Link>
             {canEdit && <Link href="/rentals/new" className="btn-primary">＋ 新增租約</Link>}
           </>

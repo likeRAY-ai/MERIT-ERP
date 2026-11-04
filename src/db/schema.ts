@@ -459,6 +459,66 @@ export const rentalBills = pgTable(
   (t) => [uniqueIndex("rental_bills_period_unique").on(t.contractId, t.periodStart)],
 );
 
+// 租賃報價單：QUOTE 報價中、ACCEPTED 已成交（已轉租約）、LOST 未成交
+export const rentalQuoteStatusEnum = pgEnum("rental_quote_status", ["QUOTE", "ACCEPTED", "LOST"]);
+// RENT 租金（按月／按天）、FEE 一次性費用（安裝、運費等）
+export const quoteLineKindEnum = pgEnum("quote_line_kind", ["RENT", "FEE"]);
+
+export const rentalQuotes = pgTable(
+  "rental_quotes",
+  {
+    id: serial("id").primaryKey(),
+    number: text("number").notNull().unique(), // 例如 RQ20261104-001
+    date: timestamp("date", { withTimezone: true }).notNull().defaultNow(),
+    validUntil: timestamp("valid_until", { withTimezone: true }),
+    status: rentalQuoteStatusEnum("status").notNull().default("QUOTE"),
+    customerId: integer("customer_id").references(() => customers.id),
+    customerName: text("customer_name"), // 未建檔客戶
+    contact: text("contact"),
+    phone: text("phone"),
+    buyerTaxId: text("buyer_tax_id"),
+    address: text("address"), // 設備放置地點
+    salespersonId: integer("salesperson_id").references(() => users.id),
+    billingType: billingTypeEnum("billing_type").notNull().default("MONTHLY"),
+    billingMonths: integer("billing_months").notNull().default(1),
+    term: integer("term"), // 租期：按月為月數、按天為天數；空白＝不定期
+    plannedStart: timestamp("planned_start", { withTimezone: true }),
+    taxType: taxTypeEnum("tax_type").notNull().default("INCLUDED"),
+    deposit: integer("deposit").notNull().default(0),
+    note: text("note"),
+    contractId: integer("contract_id").references(() => rentalContracts.id),
+    createdById: integer("created_by_id").notNull().references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("rental_quotes_status_idx").on(t.status), index("rental_quotes_customer_idx").on(t.customerId)],
+);
+
+export const rentalQuoteItems = pgTable("rental_quote_items", {
+  id: serial("id").primaryKey(),
+  quoteId: integer("quote_id")
+    .notNull()
+    .references(() => rentalQuotes.id, { onDelete: "cascade" }),
+  kind: quoteLineKindEnum("kind").notNull().default("RENT"),
+  name: text("name").notNull(),
+  description: text("description"),
+  qty: integer("qty").notNull(),
+  unitPrice: integer("unit_price").notNull(), // 租金：每台每月／每天；費用：單價（依稅別）
+  sort: integer("sort").notNull().default(0),
+});
+
+export const rentalQuotesRelations = relations(rentalQuotes, ({ one, many }) => ({
+  customer: one(customers, { fields: [rentalQuotes.customerId], references: [customers.id] }),
+  salesperson: one(users, { fields: [rentalQuotes.salespersonId], references: [users.id] }),
+  createdBy: one(users, { fields: [rentalQuotes.createdById], references: [users.id] }),
+  contract: one(rentalContracts, { fields: [rentalQuotes.contractId], references: [rentalContracts.id] }),
+  items: many(rentalQuoteItems),
+}));
+
+export const rentalQuoteItemsRelations = relations(rentalQuoteItems, ({ one }) => ({
+  quote: one(rentalQuotes, { fields: [rentalQuoteItems.quoteId], references: [rentalQuotes.id] }),
+}));
+
 export const rentalAssetsRelations = relations(rentalAssets, ({ one, many }) => ({
   serial: one(serialNumbers, { fields: [rentalAssets.serialId], references: [serialNumbers.id] }),
   items: many(rentalItems),

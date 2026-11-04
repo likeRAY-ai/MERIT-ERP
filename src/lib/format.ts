@@ -233,3 +233,9 @@ export function chineseAmount(n: number): string {
   }
   return (neg ? "負" : "") + out + "元整";
 }
+
+export const RENTAL_QUOTE_STATUS_LABELS: Record<string, string> = {
+  QUOTE: "報價中",
+  ACCEPTED: "已成交・已轉租約",
+  LOST: "未成交",
+};

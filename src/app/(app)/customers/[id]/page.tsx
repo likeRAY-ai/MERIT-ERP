@@ -34,6 +34,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
           <>
             <Link href={`/orders?q=${encodeURIComponent(c.name)}`} className="btn">報價／訂單</Link>
             <Link href={`/orders/new?customer=${c.id}`} className="btn">＋ 開報價單</Link>
+            <Link href={`/rentals/quotes/new?customer=${c.id}`} className="btn">＋ 租賃報價</Link>
             <Link href={`/rentals/new?customer=${c.id}`} className="btn">＋ 新增租約</Link>
             <Link href={`/sales/new?customer=${c.id}`} className="btn-primary">＋ 開銷貨單</Link>
           </>

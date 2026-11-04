@@ -22,6 +22,27 @@ type C = {
 
 type Mode = "MONTH" | "PREPAY" | "DAY";
 
+// 由租賃報價單轉入的資料
+export type QuoteSeed = {
+  id: number;
+  number: string;
+  customerId: number | null;
+  customerName: string | null;
+  contact: string | null;
+  phone: string | null;
+  address: string | null;
+  salespersonId: number | null;
+  taxType: TaxType;
+  mode: Mode;
+  months: number;
+  startDate: string;
+  endDate: string;
+  deposit: number;
+  note: string | null;
+  rent: { name: string; qty: number; rate: number }[];
+  fees: { name: string; qty: number; rate: number }[];
+};
+
 export default function ContractForm({
   customers,
   staff,
@@ -29,6 +50,7 @@ export default function ContractForm({
   today,
   uid,
   defaultCustomer,
+  quote,
 }: {
   customers: C[];
   staff: { id: number; name: string }[];
@@ -36,20 +58,22 @@ export default function ContractForm({
   today: string;
   uid: number;
   defaultCustomer?: number;
+  quote?: QuoteSeed;
 }) {
   const [state, action, pending] = useFormAction(submitContract);
   const init = customers.find((c) => c.id === defaultCustomer);
   const [customerId, setCustomerId] = useState<number | "">(init?.id ?? "");
-  const [filter, setFilter] = useState("");
-  const [contact, setContact] = useState(init?.contact ?? "");
-  const [phone, setPhone] = useState(init?.phone ?? init?.mobile ?? "");
-  const [address, setAddress] = useState(init?.address ?? "");
-  const [taxType, setTaxType] = useState<TaxType>(init ? (init.taxType ?? (init.type === "COMPANY" ? "EXCLUDED" : "INCLUDED")) : "INCLUDED");
+  const [filter, setFilter] = useState(quote && !quote.customerId ? (quote.customerName ?? "") : "");
+  const [contact, setContact] = useState(quote?.contact ?? init?.contact ?? "");
+  const [phone, setPhone] = useState(quote?.phone ?? init?.phone ?? init?.mobile ?? "");
+  const [address, setAddress] = useState(quote?.address ?? init?.address ?? "");
+  const [taxType, setTaxType] = useState<TaxType>(quote?.taxType ?? (init ? (init.taxType ?? (init.type === "COMPANY" ? "EXCLUDED" : "INCLUDED")) : "INCLUDED"));
   const [payment, setPayment] = useState(init?.type === "COMPANY" ? "CREDIT" : "TRANSFER");
-  const [mode, setMode] = useState<Mode>("MONTH");
-  const [months, setMonths] = useState(3);
+  const [mode, setMode] = useState<Mode>(quote?.mode ?? "MONTH");
+  const [months, setMonths] = useState(quote?.months ?? 3);
   const [picked, setPicked] = useState<Picked[]>([]);
-  const [deposit, setDeposit] = useState("");
+  const [deposit, setDeposit] = useState(quote?.deposit ? String(quote.deposit) : "");
+  const rateHint = quote ? Object.fromEntries(quote.rent.map((r) => [r.name, r.rate])) : undefined;
   const daily = mode === "DAY";
 
   const shown = filter
@@ -59,13 +83,13 @@ export default function ContractForm({
   function pick(id: number | "") {
     setCustomerId(id);
     const c = customers.find((x) => x.id === id);
+    setPayment(c?.type === "COMPANY" ? "CREDIT" : "TRANSFER");
+    // 從報價單轉入時保留報價上的聯絡資料與稅別
+    if (quote) return;
     setContact(c?.contact ?? "");
     setPhone(c?.phone ?? c?.mobile ?? "");
     setAddress(c?.address ?? "");
-    if (c) {
-      setTaxType(c.taxType ?? (c.type === "COMPANY" ? "EXCLUDED" : "INCLUDED"));
-      setPayment(c.type === "COMPANY" ? "CREDIT" : "TRANSFER");
-    }
+    if (c) setTaxType(c.taxType ?? (c.type === "COMPANY" ? "EXCLUDED" : "INCLUDED"));
   }
 
   function changeMode(m: Mode) {
@@ -90,6 +114,13 @@ export default function ContractForm({
         if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") e.preventDefault();
       }}
     >
+      {quote && <input type="hidden" name="quoteId" value={quote.id} />}
+      {quote && !quote.customerId && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          報價單上的客戶「{quote.customerName}」尚未建檔。請在下方選擇客戶；若還沒有資料，請先
+          <a href="/customers/new" target="_blank" className="link">新增客戶</a>，再重新整理此頁。
+        </p>
+      )}
       <div className="card grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="客戶 *">
           <input className="input mb-1" placeholder="輸入名稱、電話或編號篩選" value={filter} onChange={(e) => setFilter(e.target.value)} />
@@ -113,7 +144,7 @@ export default function ContractForm({
           <input name="address" className="input" value={address} onChange={(e) => setAddress(e.target.value)} />
         </Field>
         <Field label="業務人員">
-          <select name="salespersonId" className="input" defaultValue={uid}>
+          <select name="salespersonId" className="input" defaultValue={quote ? (quote.salespersonId ?? "") : uid}>
             <option value="">—</option>
             {staff.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
@@ -149,10 +180,10 @@ export default function ContractForm({
             </Field>
           )}
           <Field label="開始日期 *">
-            <input type="date" name="startDate" className="input" defaultValue={today} required />
+            <input type="date" name="startDate" className="input" defaultValue={quote?.startDate || today} required />
           </Field>
           <Field label={daily ? "結束日期 *" : "到期日"} hint={daily ? undefined : "空白＝不定期，按月持續收費"}>
-            <input type="date" name="endDate" className="input" required={daily} />
+            <input type="date" name="endDate" className="input" required={daily} defaultValue={quote?.endDate} />
           </Field>
           <Field label="營業稅">
             <select name="taxType" className="input" value={taxType} onChange={(e) => setTaxType(e.target.value as TaxType)}>
@@ -178,14 +209,35 @@ export default function ContractForm({
             </label>
           )}
           <Field label="備註" className="sm:col-span-2 lg:col-span-4">
-            <input name="note" className="input" placeholder="例如：合約編號、維護條款" />
+            <input name="note" className="input" placeholder="例如：合約編號、維護條款" defaultValue={quote?.note ?? ""} />
           </Field>
         </div>
       </div>
 
       <div className="card space-y-3">
         <h2 className="font-semibold">出租設備（已選 {picked.length} 台）</h2>
-        <AssetChooser assets={assets} daily={daily} picked={picked} setPicked={setPicked} />
+        {quote && (
+          <div className="rounded-lg bg-brand-50 px-3 py-2 text-sm">
+            <div className="font-semibold">報價內容（勾選設備時自動帶入報價租金）</div>
+            <ul className="mt-1 space-y-0.5">
+              {quote.rent.map((r) => {
+                const n = picked.filter((p) => assets.find((a) => a.id === p.assetId)?.name === r.name).length;
+                return (
+                  <li key={r.name}>
+                    {r.name} × {r.qty}・{daily ? "日" : "月"}租 {money(r.rate)}
+                    <span className={`ml-2 ${n >= r.qty ? "text-green-700" : "text-amber-700"}`}>已選 {n}／{r.qty}</span>
+                  </li>
+                );
+              })}
+            </ul>
+            {quote.fees.length > 0 && (
+              <p className="mt-1 text-xs text-gray-600">
+                一次性費用（{quote.fees.map((f) => `${f.name} ${money(f.qty * f.rate)}`).join("、")}）不會算進租約，建立租約後請另開銷貨單收取。
+              </p>
+            )}
+          </div>
+        )}
+        <AssetChooser assets={assets} daily={daily} picked={picked} setPicked={setPicked} rateHint={rateHint} />
         {picked.length > 0 && (
           <div className="text-right text-sm text-gray-700">
             {daily ? "每天" : mode === "PREPAY" ? `每 ${months} 個月` : "每月"}租金

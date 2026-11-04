@@ -23,6 +23,7 @@ import {
 const refresh = (id?: number) => {
   revalidatePath("/rentals");
   revalidatePath("/rentals/assets");
+  revalidatePath("/rentals/quotes");
   if (id) revalidatePath(`/rentals/${id}`);
   revalidatePath("/sales");
   revalidatePath("/");
@@ -62,6 +63,7 @@ export async function submitContract(_: ActionState, fd: FormData): Promise<Acti
         depositReceived: fd.get("depositReceived") === "on",
         note: optStr(fd, "note"),
         items: items.data,
+        quoteId: Number(fd.get("quoteId")) || null,
       },
       s.uid,
     );
