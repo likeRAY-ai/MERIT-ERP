@@ -35,7 +35,7 @@ export type AssetInput = {
   name: string;
   monthlyRate: number;
   dailyRate: number;
-  cost: number;
+  cost?: number; // 未提供（無權限看成本）時保留原值
   acquiredAt?: Date | null;
   note?: string | null;
   status?: "AVAILABLE" | "MAINTENANCE" | "RETIRED";
@@ -44,7 +44,7 @@ export type AssetInput = {
 function checkAsset(a: AssetInput) {
   if (!a.code.trim()) throw new AppError("請填寫設備編號");
   if (!a.name.trim()) throw new AppError("請填寫設備名稱");
-  for (const [k, v] of [["月租", a.monthlyRate], ["日租", a.dailyRate], ["成本", a.cost]] as const) {
+  for (const [k, v] of [["月租", a.monthlyRate], ["日租", a.dailyRate], ["成本", a.cost ?? 0]] as const) {
     if (!Number.isInteger(v) || v < 0) throw new AppError(`${k}必須是 0 以上的整數`);
   }
 }
@@ -59,7 +59,7 @@ export async function saveAsset(db: DB, input: AssetInput, id?: number) {
     name: input.name.trim(),
     monthlyRate: input.monthlyRate,
     dailyRate: input.dailyRate,
-    cost: input.cost,
+    ...(input.cost !== undefined ? { cost: input.cost } : {}),
     acquiredAt: input.acquiredAt ?? null,
     note: input.note?.trim() || null,
   };

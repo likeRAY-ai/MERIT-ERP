@@ -73,7 +73,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         )}
       </div>
 
-      {s.role !== "ACCOUNTANT" && <ProductForm product={p} categories={cats} />}
+      {/* 只傳表單需要的欄位，成本不送到瀏覽器 */}
+      {s.role !== "ACCOUNTANT" && <ProductForm product={formFields(p)} categories={cats} />}
 
       {p.trackSerial && (
         <section>
@@ -133,4 +134,10 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
       </section>
     </div>
   );
+}
+
+function formFields(p: typeof products.$inferSelect) {
+  const { id, sku, barcode, altCode, name, brand, spec, unit, categoryId, trackSerial, isService } = p;
+  const { warrantyMonths, retailPrice, businessPrice, safetyStock, active, note } = p;
+  return { id, sku, barcode, altCode, name, brand, spec, unit, categoryId, trackSerial, isService, warrantyMonths, retailPrice, businessPrice, safetyStock, active, note };
 }

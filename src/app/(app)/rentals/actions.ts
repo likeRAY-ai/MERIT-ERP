@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/db";
-import { requireActionUser } from "@/lib/auth";
+import { canSeeCost, requireActionUser } from "@/lib/auth";
 import { runAction, optStr, int, str, type ActionState } from "@/lib/action";
 import { AppError } from "@/lib/errors";
 import { parseDateInput, startOfTaipeiDay } from "@/lib/format";
@@ -147,7 +147,7 @@ export async function billAllDue(_: ActionState, _fd: FormData): Promise<ActionS
 export async function submitAsset(id: number | null, _: ActionState, fd: FormData): Promise<ActionState> {
   let newId = 0;
   const res = await runAction(async () => {
-    await requireActionUser(["OWNER", "STAFF"]);
+    const s = await requireActionUser(["OWNER", "STAFF"]);
     const st = str(fd, "status");
     const r = await saveAsset(
       db,
@@ -156,7 +156,8 @@ export async function submitAsset(id: number | null, _: ActionState, fd: FormDat
         name: str(fd, "name"),
         monthlyRate: int(fd, "monthlyRate", "月租"),
         dailyRate: int(fd, "dailyRate", "日租"),
-        cost: int(fd, "cost", "成本"),
+        // 員工看不到成本，也不能修改
+        cost: canSeeCost(s) ? int(fd, "cost", "成本") : undefined,
         acquiredAt: parseDateInput(str(fd, "acquiredAt")),
         note: optStr(fd, "note"),
         status: st === "MAINTENANCE" || st === "RETIRED" ? st : "AVAILABLE",

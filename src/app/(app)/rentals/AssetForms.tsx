@@ -11,7 +11,7 @@ export type AssetData = {
   status: string;
   monthlyRate: number;
   dailyRate: number;
-  cost: number;
+  cost?: number;
   acquiredAt: string;
   note: string | null;
 };
@@ -38,9 +38,7 @@ export function AssetForm({ asset, showCost }: { asset?: AssetData; showCost: bo
           <Field label="設備成本">
             <input name="cost" defaultValue={asset?.cost ?? ""} className="input" inputMode="numeric" />
           </Field>
-        ) : (
-          <input type="hidden" name="cost" value={asset?.cost ?? 0} />
-        )}
+        ) : null}
         <Field label="取得日期">
           <input type="date" name="acquiredAt" defaultValue={asset?.acquiredAt} className="input" />
         </Field>

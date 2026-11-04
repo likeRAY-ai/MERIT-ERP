@@ -1,11 +1,11 @@
 "use server";
 
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { requireActionUser } from "@/lib/auth";
+import { requireActionUser, startSession } from "@/lib/auth";
 import { runAction, str, required, type ActionState } from "@/lib/action";
 import { AppError } from "@/lib/errors";
 
@@ -59,7 +59,11 @@ export async function updateUser(id: number, _: ActionState, fd: FormData): Prom
       checkPassword(pw);
       data.passwordHash = await bcrypt.hash(pw, 10);
     }
-    await db.update(users).set(data).where(eq(users.id, id));
+    // 重設密碼或停用：這個帳號在所有裝置上的登入立即失效
+    await db
+      .update(users)
+      .set(pw || !active ? { ...data, sessionVersion: sql`${users.sessionVersion} + 1` } : data)
+      .where(eq(users.id, id));
     revalidatePath("/users");
     return pw ? "已儲存並重設密碼" : "已儲存";
   });
@@ -75,7 +79,13 @@ export async function changeMyPassword(_: ActionState, fd: FormData): Promise<Ac
     const pw = String(fd.get("password") ?? "");
     checkPassword(pw);
     if (pw !== String(fd.get("confirm") ?? "")) throw new AppError("兩次輸入的新密碼不一致");
-    await db.update(users).set({ passwordHash: await bcrypt.hash(pw, 10) }).where(eq(users.id, me.uid));
-    return "密碼已更新";
+    // 其他裝置上的登入失效，目前這台重新發給新的登入狀態
+    const [nu] = await db
+      .update(users)
+      .set({ passwordHash: await bcrypt.hash(pw, 10), sessionVersion: sql`${users.sessionVersion} + 1` })
+      .where(eq(users.id, me.uid))
+      .returning();
+    await startSession({ uid: nu.id, name: nu.name, role: nu.role, sv: nu.sessionVersion });
+    return "密碼已更新，其他裝置上的登入已登出";
   });
 }

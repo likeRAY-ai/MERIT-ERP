@@ -39,7 +39,8 @@ export default async function AssetPage({ params }: { params: Promise<{ id: stri
       {s.role !== "ACCOUNTANT" ? (
         <AssetForm
           showCost={canSeeCost(s)}
-          asset={{ ...a, acquiredAt: isoDate(a.acquiredAt) }}
+          // 沒有權限時不把成本送到瀏覽器
+          asset={{ ...a, cost: canSeeCost(s) ? a.cost : undefined, acquiredAt: isoDate(a.acquiredAt) }}
         />
       ) : null}
       <section>

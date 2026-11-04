@@ -13,8 +13,8 @@ export async function getSession(): Promise<Session | null> {
   if (!s) return null;
   // 確認帳號仍然有效（被停用會立即登出）
   const u = await db.query.users.findFirst({ where: eq(users.id, s.uid) });
-  if (!u || !u.active) return null;
-  return { uid: u.id, name: u.name, role: u.role };
+  if (!u || !u.active || u.sessionVersion !== s.sv) return null;
+  return { uid: u.id, name: u.name, role: u.role, sv: u.sessionVersion };
 }
 
 // 頁面用：未登入導向登入頁；權限不足導回首頁

@@ -28,7 +28,17 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: roleEnum("role").notNull().default("STAFF"),
   active: boolean("active").notNull().default(true),
+  // 改密碼、停用時加 1，舊的登入狀態立即失效
+  sessionVersion: integer("session_version").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 登入失敗次數（防止暴力猜密碼）：key 為 "u:帳號" 或 "ip:位址"
+export const loginThrottle = pgTable("login_throttle", {
+  key: text("key").primaryKey(),
+  failures: integer("failures").notNull().default(0),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull().defaultNow(),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
 });
 
 // ───────── 基本資料 ─────────

@@ -17,7 +17,7 @@
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.4",
     "jose": "^6.2.14",
-    "next": "15.5.28",
+    "next": "^15.5.29",
     "pg": "^8.23.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -35,9 +35,12 @@
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",
-    "eslint-config-next": "15.5.28",
+    "eslint-config-next": "^15.5.29",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5"
+  },
+  "overrides": {
+    "postcss": "^8.5.23"
   }
 }

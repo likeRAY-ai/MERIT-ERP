@@ -8,6 +8,7 @@ export type Session = {
   uid: number;
   name: string;
   role: "OWNER" | "STAFF" | "ACCOUNTANT";
+  sv: number; // 帳號的 sessionVersion，改密碼後舊 cookie 失效
 };
 
 function secret() {
@@ -28,7 +29,12 @@ export async function verifySession(token: string | undefined): Promise<Session 
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
-    return { uid: Number(payload.uid), name: String(payload.name), role: payload.role as Session["role"] };
+    return {
+      uid: Number(payload.uid),
+      name: String(payload.name),
+      role: payload.role as Session["role"],
+      sv: Number(payload.sv ?? 0),
+    };
   } catch {
     return null;
   }

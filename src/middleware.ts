@@ -11,7 +11,8 @@ export async function middleware(req: NextRequest) {
     }
     return NextResponse.redirect(new URL("/login", req.url));
   }
-  if (session && isLogin) return NextResponse.redirect(new URL("/", req.url));
+  // 已登入也讓登入頁正常顯示：帳號被停用或改過密碼時，cookie 仍有效但伺服器端會判定失效，
+  // 若在這裡導回首頁會和首頁的「導向登入頁」來回無限重導
   return NextResponse.next();
 }
 
