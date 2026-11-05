@@ -8,6 +8,7 @@ import {
   rentalBills,
   rentalContracts,
   rentalItems,
+  rentalRateChanges,
   rentalQuotes,
   serialNumbers,
   stockMovements,
@@ -251,7 +252,15 @@ async function rentalProductId(tx: Tx) {
 }
 
 // 產生下一期租金：建立銷貨單並記錄帳單
-export async function billContract(db: DB, contractId: number, userId: number) {
+// 本期調整（只影響這一張帳單，不改租約）：
+// rates：某台設備本期單價；extra：加收項目；discount：折讓金額
+export type BillAdjust = {
+  rates?: Record<number, number>;
+  extra?: { label: string; amount: number } | null;
+  discount?: { label: string; amount: number } | null;
+};
+
+export async function billContract(db: DB, contractId: number, userId: number, adjust?: BillAdjust) {
   return db.transaction(async (tx) => {
     const [c] = await tx.select().from(rentalContracts).where(eq(rentalContracts.id, contractId)).for("update");
     if (!c) throw new AppError("找不到租約");
@@ -264,6 +273,8 @@ export async function billContract(db: DB, contractId: number, userId: number) {
     const active = billableItems(items, period);
     if (!active.length) throw new AppError("這一期沒有出租中的設備");
 
+    const adj = checkAdjust(adjust, active.map((i) => i.id));
+    const notes = [adj.discount ? `${adj.discount.label} 折讓 ${adj.discount.amount}` : ""].filter(Boolean);
     const productId = await rentalProductId(tx);
     const customer = await tx.query.customers.findFirst({ where: eq(customers.id, c.customerId) });
     const range = `${dateStr(period.start)}～${dateStr(period.end)}`;
@@ -279,19 +290,86 @@ export async function billContract(db: DB, contractId: number, userId: number) {
         contact: c.contact,
         deliveryAddress: c.address,
         date: new Date(),
-        note: `租約 ${c.number} 租金 ${range}`,
-        items: active.map((i) => ({
-          productId,
-          qty: period.units,
-          unitPrice: i.rate,
-          description: `${i.asset.code} ${i.asset.name}｜${range}（${period.units} ${period.unitLabel}，${unitName} ${i.rate}）`,
-        })),
+        note: [`租約 ${c.number} 租金 ${range}`, notes.join("；")].filter(Boolean).join("；"),
+        discount: adj.discount?.amount ?? 0,
+        items: [
+          ...active.map((i) => {
+            const rate = adj.rates?.[i.id] ?? i.rate;
+            const changed = rate !== i.rate ? `，本期調整，原 ${i.rate}` : "";
+            return {
+              productId,
+              qty: period.units,
+              unitPrice: rate,
+              description: `${i.asset.code} ${i.asset.name}｜${range}（${period.units} ${period.unitLabel}，${unitName} ${rate}${changed}）`,
+            };
+          }),
+          ...(adj.extra ? [{ productId, qty: 1, unitPrice: adj.extra.amount, description: adj.extra.label }] : []),
+        ],
       },
       userId,
     );
     await tx.insert(rentalBills).values({ contractId, periodStart: period.start, periodEnd: period.end, saleId: sale.id });
     await tx.update(rentalContracts).set({ nextBillDate: period.next }).where(eq(rentalContracts.id, contractId));
     return sale;
+  });
+}
+
+function checkAdjust(a: BillAdjust | undefined, itemIds: number[]): BillAdjust {
+  if (!a) return {};
+  const rates: Record<number, number> = {};
+  for (const [k, v] of Object.entries(a.rates ?? {})) {
+    const id = Number(k);
+    if (!itemIds.includes(id)) continue; // 本期沒有計費的設備忽略
+    if (!Number.isInteger(v) || v < 0) throw new AppError("本期單價必須是 0 以上的整數");
+    rates[id] = v;
+  }
+  const line = (x: { label: string; amount: number } | null | undefined, what: string, fallback: string) => {
+    if (!x || !x.amount) return null;
+    if (!Number.isInteger(x.amount) || x.amount < 0) throw new AppError(`${what}金額必須是 0 以上的整數`);
+    return { label: x.label?.trim().slice(0, 100) || fallback, amount: x.amount };
+  };
+  return { rates, extra: line(a.extra, "加收", "其他費用"), discount: line(a.discount, "折讓", "租金折讓") };
+}
+
+// 調整租金：改設備的月租／日租，下一期（尚未開帳的期間）起生效，並留下紀錄
+export async function changeRates(
+  db: DB,
+  contractId: number,
+  changes: { itemId: number; rate: number }[],
+  reason: string | null,
+  userId: number,
+) {
+  for (const ch of changes) {
+    if (!Number.isInteger(ch.rate) || ch.rate < 0) throw new AppError("租金必須是 0 以上的整數");
+  }
+  return db.transaction(async (tx) => {
+    const [c] = await tx.select().from(rentalContracts).where(eq(rentalContracts.id, contractId)).for("update");
+    if (!c || c.status !== "ACTIVE") throw new AppError("租約不是租約中");
+    const ids = changes.map((x) => x.itemId);
+    if (!ids.length) throw new AppError("沒有要調整的設備");
+    const items = await tx
+      .select()
+      .from(rentalItems)
+      .where(and(eq(rentalItems.contractId, contractId), inArray(rentalItems.id, ids)));
+    if (items.length !== ids.length) throw new AppError("設備不屬於這份租約");
+    if (items.some((i) => i.returnedAt)) throw new AppError("已收回的設備不能調整租金");
+    let n = 0;
+    for (const ch of changes) {
+      const it = items.find((i) => i.id === ch.itemId)!;
+      if (it.rate === ch.rate) continue;
+      await tx.update(rentalItems).set({ rate: ch.rate }).where(eq(rentalItems.id, it.id));
+      await tx.insert(rentalRateChanges).values({
+        contractId,
+        itemId: it.id,
+        oldRate: it.rate,
+        newRate: ch.rate,
+        reason: reason?.trim() || null,
+        changedById: userId,
+      });
+      n++;
+    }
+    if (!n) throw new AppError("租金沒有變動");
+    return n;
   });
 }
 

@@ -64,6 +64,13 @@
       "when": 1793776855101,
       "tag": "0008_security",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793861934748,
+      "tag": "0009_rental_rate_changes",
+      "breakpoints": true
     }
   ]
 }

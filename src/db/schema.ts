@@ -453,6 +453,26 @@ export const rentalItems = pgTable(
   (t) => [index("rental_items_asset_idx").on(t.assetId)],
 );
 
+// 租金調整紀錄：租約中途調整某台設備的月租／日租，下一期起生效
+export const rentalRateChanges = pgTable(
+  "rental_rate_changes",
+  {
+    id: serial("id").primaryKey(),
+    contractId: integer("contract_id")
+      .notNull()
+      .references(() => rentalContracts.id, { onDelete: "cascade" }),
+    itemId: integer("item_id")
+      .notNull()
+      .references(() => rentalItems.id, { onDelete: "cascade" }),
+    oldRate: integer("old_rate").notNull(),
+    newRate: integer("new_rate").notNull(),
+    reason: text("reason"),
+    changedById: integer("changed_by_id").notNull().references(() => users.id),
+    changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("rental_rate_changes_contract_idx").on(t.contractId)],
+);
+
 // 每期帳單（對應自動產生的銷貨單）
 export const rentalBills = pgTable(
   "rental_bills",
@@ -540,11 +560,18 @@ export const rentalContractsRelations = relations(rentalContracts, ({ one, many 
   createdBy: one(users, { fields: [rentalContracts.createdById], references: [users.id] }),
   items: many(rentalItems),
   bills: many(rentalBills),
+  rateChanges: many(rentalRateChanges),
 }));
 
 export const rentalItemsRelations = relations(rentalItems, ({ one }) => ({
   contract: one(rentalContracts, { fields: [rentalItems.contractId], references: [rentalContracts.id] }),
   asset: one(rentalAssets, { fields: [rentalItems.assetId], references: [rentalAssets.id] }),
+}));
+
+export const rentalRateChangesRelations = relations(rentalRateChanges, ({ one }) => ({
+  contract: one(rentalContracts, { fields: [rentalRateChanges.contractId], references: [rentalContracts.id] }),
+  item: one(rentalItems, { fields: [rentalRateChanges.itemId], references: [rentalItems.id] }),
+  changedBy: one(users, { fields: [rentalRateChanges.changedById], references: [users.id] }),
 }));
 
 export const rentalBillsRelations = relations(rentalBills, ({ one }) => ({

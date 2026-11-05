@@ -12,6 +12,7 @@ import {
   addItems,
   assetFromStock,
   billContract,
+  changeRates,
   createContract,
   dueContracts,
   endContract,
@@ -30,6 +31,13 @@ const refresh = (id?: number) => {
 };
 
 const itemsSchema = z.array(z.object({ assetId: z.number().int(), rate: z.number().int() }));
+const ratesSchema = z.array(z.object({ itemId: z.number().int(), rate: z.number().int() })).max(500);
+const lineSchema = z.object({ label: z.string().max(100), amount: z.number().int() }).nullable().optional();
+const adjustSchema = z.object({
+  rates: z.record(z.string(), z.number().int()).optional(),
+  extra: lineSchema,
+  discount: lineSchema,
+});
 const PAYMENTS = ["CASH", "CARD", "TRANSFER", "CREDIT"] as const;
 const dateOr = (fd: FormData, key: string, label: string) => {
   const d = parseDateInput(str(fd, key));
@@ -82,7 +90,10 @@ export async function contractAction(_: ActionState, fd: FormData): Promise<Acti
     const s = await requireActionUser(["OWNER", "STAFF"]);
     switch (op) {
       case "bill": {
-        const sale = await billContract(db, id, s.uid);
+        const raw = String(fd.get("adjust") || "");
+        const adj = raw ? adjustSchema.safeParse(JSON.parse(raw)) : null;
+        if (adj && !adj.success) throw new AppError("本期調整資料格式錯誤");
+        const sale = await billContract(db, id, s.uid, adj?.data);
         saleId = sale.id;
         refresh(id);
         return;
@@ -103,6 +114,13 @@ export async function contractAction(_: ActionState, fd: FormData): Promise<Acti
         await addItems(db, id, items.data, dateOr(fd, "date", "開始日期"));
         refresh(id);
         return "已加租設備，下一期起一併收費";
+      }
+      case "rates": {
+        const parsed = ratesSchema.safeParse(JSON.parse(String(fd.get("rates") || "[]")));
+        if (!parsed.success) throw new AppError("租金資料格式錯誤");
+        const n = await changeRates(db, id, parsed.data, optStr(fd, "reason"), s.uid);
+        refresh(id);
+        return `已調整 ${n} 台設備的租金，下一期帳單起生效`;
       }
       case "end": {
         const refund = str(fd, "depositRefund");

@@ -17,7 +17,7 @@ import {
 } from "@/lib/format";
 import { billableItems, nextPeriod } from "@/lib/services/rentals";
 import { PageHeader, TableWrap, Empty } from "@/components/ui";
-import { AddItemsForm, BillButton, DepositButton, EndForm, ItemsTable } from "./ContractTools";
+import { AddItemsForm, BillButton, DepositButton, EndForm, ItemsTable, RatesForm } from "./ContractTools";
 
 export const metadata = { title: "租約" };
 
@@ -39,6 +39,7 @@ export default async function ContractPage({
       salesperson: true,
       createdBy: true,
       items: { with: { asset: true }, orderBy: (t, { asc }) => [asc(t.id)] },
+      rateChanges: { with: { item: { with: { asset: true } }, changedBy: true }, orderBy: (t, { desc }) => [desc(t.changedAt)] },
     },
   });
   if (!c) notFound();
@@ -134,7 +135,17 @@ export default async function ContractPage({
                 應收 <b>{money(periodTotal)}</b>
                 {due ? <span className="ml-1 font-semibold text-red-600">已到期，請開帳</span> : <span className="ml-1 text-gray-500">尚未到期，可提前開帳</span>}
               </p>
-              {canEdit && <BillButton id={c.id} due={due} label="產生這一期的銷貨單" />}
+              {canEdit && (
+                <BillButton
+                  id={c.id}
+                  due={due}
+                  label="產生這一期的銷貨單"
+                  units={period.units}
+                  unitLabel={period.unitLabel}
+                  taxType={c.taxType}
+                  lines={periodItems.map((i) => ({ id: i.id, label: `${i.asset.code} ${i.asset.name}`, rate: i.rate }))}
+                />
+              )}
             </>
           ) : (
             <p className="text-sm text-gray-600">所有租期都已開帳。</p>
@@ -145,7 +156,16 @@ export default async function ContractPage({
       <section className="card space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold">出租設備</h2>
-          {canEdit && active && <AddItemsForm id={c.id} assets={free} daily={daily} today={today} />}
+          {canEdit && active && (
+            <div className="flex min-w-0 max-w-full flex-wrap gap-2">
+              <RatesForm
+                id={c.id}
+                daily={daily}
+                items={c.items.filter((i) => !i.returnedAt).map((i) => ({ id: i.id, label: `${i.asset.code} ${i.asset.name}`, rate: i.rate }))}
+              />
+              <AddItemsForm id={c.id} assets={free} daily={daily} today={today} />
+            </div>
+          )}
         </div>
         <ItemsTable
           id={c.id}
@@ -163,6 +183,22 @@ export default async function ContractPage({
             returned: i.returnedAt ? dateStr(i.returnedAt) : null,
           }))}
         />
+        {c.rateChanges.length > 0 && (
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold text-gray-700">租金調整紀錄</h3>
+            <ul className="space-y-0.5 text-sm">
+              {c.rateChanges.map((r) => (
+                <li key={r.id} className="text-gray-700">
+                  <span className="text-gray-500">{dateStr(r.changedAt)}</span>{" "}
+                  <span className="font-mono">{r.item.asset.code}</span> {r.item.asset.name}：
+                  {money(r.oldRate)} → <b>{money(r.newRate)}</b>
+                  {r.reason && <span className="text-gray-500">（{r.reason}）</span>}
+                  <span className="text-xs text-gray-400">・{r.changedBy.name}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
 
       <section>
@@ -187,7 +223,7 @@ export default async function ContractPage({
             <Empty>尚未開帳</Empty>
           )}
         </TableWrap>
-        <p className="mt-1 text-xs text-gray-500">開錯的帳單到銷貨單「作廢」即可（從最新一期開始），該期可以重新開帳。收款請在銷貨單上登記。</p>
+        <p className="mt-1 text-xs text-gray-500">開錯的帳單到銷貨單「作廢」即可（從最新一期開始），該期可以重新開帳，重開時可用「調整本期金額」改金額。收款請在銷貨單上登記。</p>
       </section>
 
       {canEdit && active && <EndForm id={c.id} today={today} refundable={refundable} />}
